@@ -531,7 +531,12 @@ function updateHudConfig() {
     stable: flight.stableApproach,
     flare,
     rotate: !!(flight.onGround && flight.rotateReady),
-    smoke: !!controls.smokeOn
+    smoke: !!controls.smokeOn,
+    vrHint: currentSpec?.vr != null ? `Vr ${Math.round(currentSpec.vr * 1.94384)}` : null,
+    vrefHint: currentSpec?.vref != null ? `Vref ${Math.round(currentSpec.vref * 1.94384)}` : null,
+    flapHint: flight.onGround
+      ? (currentSpec?.flapTakeoff != null ? `TO FLAPS ${Math.round(currentSpec.flapTakeoff * 100)}%` : null)
+      : (currentSpec?.flapLanding != null ? `LDG FLAPS ${Math.round(currentSpec.flapLanding * 100)}%` : null)
   });
   const sw = document.getElementById('stall-warn');
   if (sw) sw.classList.toggle('hidden', !flight.stalling);

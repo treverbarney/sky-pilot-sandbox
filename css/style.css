@@ -651,6 +651,17 @@ button, input {
   border-color: rgba(68, 255, 136, 0.28);
 }
 
+.ac-card[data-id="cessna182"] { --ac-accent: #88c4ff; }
+.ac-card[data-id="privatejet"] { --ac-accent: #c9d4e0; }
+.ac-card[data-id="airliner"] { --ac-accent: #7aa0ff; }
+.ac-card[data-id="f15"] { --ac-accent: #9aa7b4; }
+.ac-card[data-id="area51"] { --ac-accent: #44ff88; }
+.ac-card[data-id="amphibian"] { --ac-accent: #3ec7c9; }
+.ac-card[data-id="aerobatic"] { --ac-accent: #ff5a4a; }
+.ac-card[data-id="cargo"] { --ac-accent: #c4a574; }
+.ac-card[data-id="glider"] { --ac-accent: #e8f0ff; }
+.ac-card[data-id="heli"] { --ac-accent: #ffc14a; }
+
 .ac-card-sil {
   display: flex;
   align-items: center;

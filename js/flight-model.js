@@ -246,7 +246,8 @@ export class FlightModel {
     let yawMul = 1;
     if (this.onGround && !s.isHeli) {
       const nw = Math.min(1, Math.max(0, (spdNow - 2) / 18));
-      yawMul = 1.0 + 1.6 * nw;
+      const tiller = s.id === 'airliner' || s.id === 'cargo' ? 0.45 : (s.id === 'cessna182' || s.type === 'aerobatic' ? 1.8 : 1.0);
+      yawMul = 1.0 + 1.6 * nw * tiller;
     }
     const yawCmd = this.rudder * s.yawRate * (this.onGround ? yawMul : 1);
 
@@ -266,7 +267,8 @@ export class FlightModel {
     // Nosewheel / tailwheel: rudder steers more with groundspeed
     if (this.onGround) {
       const gs = Math.hypot(this.velocity.x, this.velocity.z);
-      const steer = this.rudder * (0.35 + Math.min(1.4, gs * 0.035));
+      const tiller = (s.id === 'airliner' || s.id === 'cargo') ? 0.4 : 1;
+      const steer = this.rudder * (0.35 + Math.min(1.4, gs * 0.035)) * tiller;
       this.euler.y += steer * dt;
     }
 
@@ -400,8 +402,10 @@ export class FlightModel {
 
     // Water drag / step taxi
     this.velocity.y = 0;
-    let wfric = 0.94;
-    if (this.brakes || this.reverse) wfric = 0.88;
+    let wfric = 0.91;
+    if (s.id === 'amphibian') wfric = 0.88;
+    if (this.brakes || this.reverse) wfric = 0.82;
+    this.euler.x *= 0.92;
     this.velocity.x *= wfric;
     this.velocity.z *= wfric;
 

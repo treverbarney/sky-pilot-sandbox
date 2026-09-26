@@ -542,7 +542,7 @@ export function createWorld(scene, opts = {}) {
       new THREE.MeshStandardMaterial({
         color: col,
         emissive: col,
-        emissiveIntensity: 1.1,
+        emissiveIntensity: 2.2,
         roughness: 0.35,
         metalness: 0.1
       })

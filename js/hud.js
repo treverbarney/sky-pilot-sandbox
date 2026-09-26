@@ -86,6 +86,9 @@ export class HUD {
     if (cfg.stable === false) chips.push({ label: 'UNSTABLE', on: true, warn: true });
     if (cfg.flare) chips.push({ label: 'FLARE', on: true, warn: true });
     if (cfg.rotate) chips.push({ label: 'Vr', on: true });
+    if (cfg.vrHint) chips.push({ label: cfg.vrHint, on: !!cfg.rotate });
+    if (cfg.vrefHint) chips.push({ label: cfg.vrefHint, on: !!cfg.flare });
+    if (cfg.flapHint) chips.push({ label: cfg.flapHint, on: true });
     if (cfg.smoke) chips.push({ label: 'SMOKE', on: true });
     this.configEl.innerHTML = chips
       .map((c) => `<span class="chip${c.on ? ' on' : ''}${c.warn ? ' warn' : ''}">${c.label}</span>`)
