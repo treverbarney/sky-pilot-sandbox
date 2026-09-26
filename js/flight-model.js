@@ -64,6 +64,8 @@ export class FlightModel {
     this._goAroundClimbTime = 0;
     this._autobrakeActive = false;
     this._passedStableGate = false;
+    this._windX = 2.5 + Math.random() * 1.5; // ~3–6 kt crosswind from +X
+    this._dutchPhase = 0;
     this._tmp = new THREE.Vector3();
     this._fwd = new THREE.Vector3();
     this._up = new THREE.Vector3();
@@ -123,6 +125,8 @@ export class FlightModel {
     this._goAroundClimbTime = 0;
     this._autobrakeActive = false;
     this._passedStableGate = false;
+    this._windX = 2.5 + Math.random() * 1.5;
+    this._dutchPhase = 0;
   }
 
   setAttitudeInputs(aileron, elevator, rudder) {
@@ -221,15 +225,24 @@ export class FlightModel {
     dt = Math.min(dt, 0.05);
     const mass = this.getEffectiveMass();
 
-    // Attitude rates — damp on ground; nosewheel steers yaw on wheels
-    const gndMul = this.onGround ? (this.getSpeed() < 5 ? 0.15 : 0.45) : 1;
-    const rollCmd = this.aileron * s.rollRate * gndMul;
+    // Attitude: heavy jets mushy at low speed; C182 stays snappy / pitch-sensitive
+    const spdNow = this.getSpeed();
+    const vrRef = s.vr || 30;
+    const inertia = s.controlInertia ?? (s.mass > 40000 ? 0.85 : (s.mass > 10000 ? 0.5 : 0.2));
+    let auth = 0.32 + 0.68 * Math.min(1, spdNow / Math.max(12, vrRef * 0.85));
+    auth = 1 - inertia * (1 - auth);
+    if (s.id === 'cessna182' || s.diff === 'easy') auth = Math.max(auth, 0.88);
+    const gndMul = this.onGround ? (spdNow < 5 ? 0.15 : 0.45) : 1;
+    const rollCmd = this.aileron * s.rollRate * gndMul * auth;
     let pitchInput = this.elevator + this.trim;
     if (this.flareAssist && !this.onGround && this.approachPhase === 'flare_window') {
       pitchInput += (s.diff === 'easy' ? 0.12 : 0.07);
     }
-    const pitchCmd = pitchInput * s.pitchRate * (this.onGround ? 0.5 : 1);
-    const spdNow = this.getSpeed();
+    let pitchSens = 1;
+    if (s.id === 'cessna182' || s.type === 'aerobatic') pitchSens = 1.28;
+    if (s.id === 'airliner' || s.id === 'cargo') pitchSens = 0.82;
+    if (this.onWater && s.waterPitchDamp) pitchSens *= s.waterPitchDamp;
+    const pitchCmd = pitchInput * s.pitchRate * (this.onGround ? 0.5 : 1) * auth * pitchSens;
     let yawMul = 1;
     if (this.onGround && !s.isHeli) {
       const nw = Math.min(1, Math.max(0, (spdNow - 2) / 18));
@@ -240,6 +253,16 @@ export class FlightModel {
     this.euler.z += rollCmd * dt;
     this.euler.x += pitchCmd * dt;
     this.euler.y += yawCmd * dt;
+
+    // Dutch-roll / wing-rock in crosswind when banked (C182 touchy)
+    const windSense = s.windSense ?? 0.5;
+    const dutch = s.dutchRoll ?? 0;
+    if (!s.isHeli && !this.onGround && dutch > 0 && Math.abs(this.euler.z) > 0.08) {
+      this._dutchPhase += dt * (1.6 + windSense);
+      const rock = Math.sin(this._dutchPhase) * dutch * windSense * 0.05 * Math.abs(this.euler.z);
+      this.euler.z += rock * dt * 8;
+      this.euler.y += rock * 0.35 * dt * 6;
+    }
     // Nosewheel / tailwheel: rudder steers more with groundspeed
     if (this.onGround) {
       const gs = Math.hypot(this.velocity.x, this.velocity.z);
@@ -306,6 +329,27 @@ export class FlightModel {
 
     this._tmp.copy(this._force).multiplyScalar(dt / mass);
     this.velocity.add(this._tmp);
+
+    // Crosswind (+X) + weathervane; light planes tippy on roll
+    {
+      const wx = this._windX || 2.5;
+      const ws = s.windSense ?? 0.5;
+      if (!this.onGround && !s.isHeli) {
+        const blend = Math.min(1, 0.4 * ws * dt);
+        this.velocity.x += wx * blend * 0.12;
+      }
+      if (this.onGround && !s.isHeli && spdNow > 3) {
+        const wv = s.weathervane ?? 0.5;
+        this.euler.y += wx * wv * 0.014 * dt * Math.min(1, spdNow / 18);
+        if ((s.id === 'cessna182' || (s.diff === 'easy' && s.type === 'prop')) && spdNow > 12) {
+          this.euler.z += Math.sign(wx || 1) * ws * 0.09 * dt * Math.min(1, (spdNow - 12) / 22);
+          if (Math.abs(this.euler.z) > 0.9 && spdNow > 16) {
+            this.alive = false;
+            return { event: 'crash', reason: 'ground loop / tip-over', vert: 0, gs: spdNow };
+          }
+        }
+      }
+    }
 
     // Soft speed clamp near Vne
     const vmax = s.maxSpeed || 200;
@@ -542,6 +586,17 @@ export class FlightModel {
         if (diff === 'expert') fail = true;
       }
     }
+    if (s.punishSlowFloat || s.id === 'f15') {
+      const onSpeedMin = (s.approachSpeedMin ?? 70);
+      if (gs < onSpeedMin * 0.85) {
+        issues.push('slow float (fighter)');
+        points -= 35; breakdown.speed -= 35;
+        if (gs < onSpeedMin * 0.7) fail = true;
+      }
+    }
+    if ((s.id === 'f15' || s.type === 'fighter') && this.euler.x < -0.12 && gs > 40) {
+      points += 8; breakdown.flare += 8;
+    }
     if (s.canWater && water && !this.gearDown) {
       points += 10; breakdown.config += 10;
     }
@@ -773,7 +828,7 @@ export class FlightModel {
     return true;
   }
 
-  /** Takeoff rotate gates — Vr band + config */
+  /** Takeoff rotate gates — unique Vr + config per type */
   _updateTakeoffGates() {
     const s = this.spec;
     if (!this.onGround || this.airborneTime > 1) {
@@ -782,20 +837,28 @@ export class FlightModel {
     }
     const spd = this.getSpeed();
     const vr = s.vr || 30;
-    const inVrBand = spd >= vr * 0.92 && spd <= vr * 1.25;
+    // Strict band — airliner must not cue rotate at 40 kt
+    const inVrBand = spd >= vr * 0.98 && spd <= vr * 1.22;
 
     let cfg = true;
     if (s.hasMixture && !this.mixtureRich) cfg = false;
     if (s.hasProp && !this.propFull) cfg = false;
     if (s.hasCondition && !this.conditionRun) cfg = false;
-    if (s.flapTakeoff != null && s.type !== 'glider') {
-      // Allow 0 or takeoff setting (and short-field alt)
+
+    if (s.requireFlapsToRotate || s.id === 'airliner' || s.id === 'privatejet' || s.id === 'cargo') {
+      const ft = s.flapTakeoff ?? 0.25;
+      const alt = s.flapTakeoffAlt;
+      const ok = Math.abs(this.flaps - ft) < 0.22 ||
+        (alt != null && Math.abs(this.flaps - alt) < 0.22);
+      if (this.flaps > 0.85) cfg = false;
+      else if (!ok) cfg = false;
+    } else if (s.flapTakeoff != null && s.type !== 'glider') {
       const ft = s.flapTakeoff;
       const alt = s.flapTakeoffAlt;
       const ok = Math.abs(this.flaps - ft) < 0.2 ||
         (alt != null && Math.abs(this.flaps - alt) < 0.2) ||
         (ft === 0 && this.flaps <= 0.7);
-      if (!ok && this.flaps > 0.85) cfg = false; // landing flaps on TO bad
+      if (!ok && this.flaps > 0.85) cfg = false;
     }
     if (s.hasSpoilers && this.spoilers) cfg = false;
     if (s.canWater) {
@@ -803,17 +866,19 @@ export class FlightModel {
       if (wantWater && this.gearDown) cfg = false;
       if (!wantWater && !this.gearDown) cfg = false;
     }
-    if (s.thrustVector && s.diff === 'expert') {
-      // TV recommended but not hard-required for rotate at speed
-    }
-
+    const thrMin = (s.id === 'airliner' || s.id === 'cargo') ? 0.85 : 0.7;
     this.takeoffConfigOk = cfg;
-    this.rotateReady = cfg && inVrBand && this.throttle >= 0.7;
+    this.rotateReady = cfg && inVrBand && this.throttle >= thrMin;
   }
 
   _updateFixedWing(dt, speed, agl, rho, mass) {
     const s = this.spec;
     let thrustMag = s.idleThrust + (s.maxThrust - s.idleThrust) * this.throttle;
+    // Per-type takeoff accel: C182 short roll, airliner long
+    if (this.onGround) {
+      const scale = s.takeoffAccelScale ?? 1;
+      thrustMag = s.idleThrust + (thrustMag - s.idleThrust) * scale;
+    }
 
     // Prop/mixture efficiency
     if (s.hasProp && !this.propFull) thrustMag *= 0.75;
@@ -830,6 +895,15 @@ export class FlightModel {
     if (this.reverse && this.onGround) {
       const revFrac = s.reverseThrustFrac || 0.4;
       thrustMag = -Math.abs(thrustMag) * revFrac * Math.max(this.throttle, 0.3);
+    }
+
+    // Rolling resistance — airliner needs most of the runway; 182 rolls quick
+    if (this.onGround && speed > 0.5 && !this.reverse) {
+      const grd = s.groundRollDrag ?? (s.mass > 40000 ? 0.045 : 0.02);
+      const velDir = this.velocity.lengthSq() > 0.01
+        ? this._tmp.copy(this.velocity).normalize()
+        : this._fwd;
+      this._force.addScaledVector(velDir, -mass * G * grd * (1 + speed * 0.012));
     }
 
     // Area 51 thrust vector
@@ -885,15 +959,22 @@ export class FlightModel {
         Cl *= (1 - (s.spoilerLiftKill || 0.4));
       }
 
-      // Ground effect — strong below ~20 ft (6.1 m)
+      // Ground effect — strong below ~20 ft; peak from type (C182 floats hard)
       const GE_CEIL = 6.1;
       let ge = 0;
       if (agl < GE_CEIL && agl > 0) {
         ge = 1 - agl / GE_CEIL;
-        const isGA = s.type === 'prop' || s.diff === 'easy' || s.canWater;
-        const isFighter = s.type === 'fighter' || s.type === 'experimental';
-        const peak = isFighter ? 0.10 : (isGA ? 0.18 : 0.14);
+        const peak = s.gePeak ?? (s.type === 'fighter' ? 0.06 : (s.diff === 'easy' ? 0.22 : 0.12));
         Cl *= 1 + peak * ge;
+      }
+
+      // Early-lift block: heavy jets cannot leap before ~0.95 Vr
+      if (this.onGround && (s.earlyLiftBlock || s.id === 'airliner')) {
+        const vr = s.vr || 70;
+        if (speed < vr * 0.95) {
+          const t = speed / (vr * 0.95);
+          Cl *= Math.max(0.12, t * t);
+        }
       }
 
       // Flare window: nose-up bleeds sink (stronger on easy types)

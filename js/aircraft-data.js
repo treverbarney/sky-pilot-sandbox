@@ -61,7 +61,16 @@ export const AIRCRAFT = [
     requireSpoilersArmed: false,
     flareAssistDefault: true,
     parkCapable: true,
-    controlLayout: {
+        windSense: 1.35,
+    dutchRoll: 1.0,
+    weathervane: 1.4,
+    groundRollDrag: 0.018,
+    takeoffAccelScale: 1.15,
+    controlInertia: 0.15,
+    gePeak: 0.22,
+    earlyLiftBlock: false,
+    requireFlapsToRotate: false,
+controlLayout: {
       pages: [
         { id: 'PRIMARY', controls: ['FLAPS', 'BRAKE', 'TRIM'] },
         { id: 'SYS', controls: ['MIX', 'PROP'] }
@@ -162,7 +171,16 @@ export const AIRCRAFT = [
     flareAssistDefault: true,
     autobrakeCapable: true,
     parkCapable: true,
-    controlLayout: {
+        windSense: 0.7,
+    dutchRoll: 0.25,
+    weathervane: 0.7,
+    groundRollDrag: 0.028,
+    takeoffAccelScale: 0.85,
+    controlInertia: 0.45,
+    gePeak: 0.12,
+    earlyLiftBlock: true,
+    requireFlapsToRotate: true,
+controlLayout: {
       pages: [
         { id: 'PRIMARY', controls: ['FLAPS', 'GEAR', 'BRAKE', 'SPOILERS'] },
         { id: 'SYS', controls: ['REV', 'ARM', 'TOGA', 'TRIM'] }
@@ -268,7 +286,16 @@ export const AIRCRAFT = [
     flareAssistDefault: false,
     autobrakeCapable: true,
     parkCapable: true,
-    controlLayout: {
+        windSense: 0.35,
+    dutchRoll: 0.1,
+    weathervane: 0.35,
+    groundRollDrag: 0.045,
+    takeoffAccelScale: 0.55,
+    controlInertia: 0.85,
+    gePeak: 0.08,
+    earlyLiftBlock: true,
+    requireFlapsToRotate: true,
+controlLayout: {
       pages: [
         { id: 'PRIMARY', controls: ['FLAPS', 'GEAR', 'BRAKE', 'SPOILERS'] },
         { id: 'SYS', controls: ['REV', 'ARM', 'TOGA', 'TRIM'] }
@@ -373,7 +400,17 @@ export const AIRCRAFT = [
     requireSpoilersArmed: false,
     flareAssistDefault: false,
     parkCapable: true,
-    controlLayout: {
+        windSense: 0.5,
+    dutchRoll: 0.15,
+    weathervane: 0.4,
+    groundRollDrag: 0.022,
+    takeoffAccelScale: 1.4,
+    controlInertia: 0.2,
+    gePeak: 0.06,
+    earlyLiftBlock: true,
+    requireFlapsToRotate: false,
+    punishSlowFloat: true,
+controlLayout: {
       pages: [
         { id: 'PRIMARY', controls: ['FLAPS', 'GEAR', 'BRAKE', 'AB'] },
         { id: 'SYS', controls: ['SPOILERS', 'TRIM'] }
@@ -473,7 +510,16 @@ export const AIRCRAFT = [
     requireSpoilersArmed: false,
     flareAssistDefault: false,
     parkCapable: true,
-    controlLayout: {
+        windSense: 0.4,
+    dutchRoll: 0.2,
+    weathervane: 0.45,
+    groundRollDrag: 0.025,
+    takeoffAccelScale: 1.2,
+    controlInertia: 0.25,
+    gePeak: 0.08,
+    earlyLiftBlock: false,
+    requireFlapsToRotate: false,
+controlLayout: {
       pages: [
         { id: 'PRIMARY', controls: ['GEAR', 'TV', 'AB', 'BRAKE'] },
         { id: 'SYS', controls: ['FLAPS', 'TRIM'] }
@@ -573,7 +619,17 @@ export const AIRCRAFT = [
     requireSpoilersArmed: false,
     flareAssistDefault: true,
     parkCapable: true,
-    controlLayout: {
+        windSense: 0.9,
+    dutchRoll: 0.5,
+    weathervane: 1.0,
+    groundRollDrag: 0.032,
+    takeoffAccelScale: 0.75,
+    controlInertia: 0.35,
+    gePeak: 0.16,
+    earlyLiftBlock: false,
+    requireFlapsToRotate: false,
+    waterPitchDamp: 0.55,
+controlLayout: {
       pages: [
         { id: 'PRIMARY', controls: ['FLAPS', 'GEAR', 'WATER', 'BRAKE'] },
         { id: 'SYS', controls: ['PROP', 'COND', 'REV', 'TRIM'] }
@@ -674,7 +730,16 @@ export const AIRCRAFT = [
     requireSpoilersArmed: false,
     flareAssistDefault: true,
     parkCapable: true,
-    controlLayout: {
+        windSense: 1.1,
+    dutchRoll: 0.4,
+    weathervane: 1.2,
+    groundRollDrag: 0.016,
+    takeoffAccelScale: 1.25,
+    controlInertia: 0.08,
+    gePeak: 0.14,
+    earlyLiftBlock: false,
+    requireFlapsToRotate: false,
+controlLayout: {
       pages: [
         { id: 'PRIMARY', controls: ['MIX', 'PROP', 'BRAKE', 'FLAPS'] },
         { id: 'SYS', controls: ['SMOKE', 'TRIM'] }
@@ -772,7 +837,16 @@ export const AIRCRAFT = [
     flareAssistDefault: true,
     autobrakeCapable: true,
     parkCapable: true,
-    controlLayout: {
+        windSense: 0.4,
+    dutchRoll: 0.12,
+    weathervane: 0.4,
+    groundRollDrag: 0.038,
+    takeoffAccelScale: 0.6,
+    controlInertia: 0.75,
+    gePeak: 0.09,
+    earlyLiftBlock: true,
+    requireFlapsToRotate: true,
+controlLayout: {
       pages: [
         { id: 'PRIMARY', controls: ['FLAPS', 'GEAR', 'BRAKE', 'REV'] },
         { id: 'SYS', controls: ['COND', 'PROP', 'TRIM'] }
@@ -874,7 +948,16 @@ export const AIRCRAFT = [
     requireSpoilersArmed: false,
     flareAssistDefault: false,
     parkCapable: true,
-    controlLayout: {
+        windSense: 1.2,
+    dutchRoll: 0.6,
+    weathervane: 1.3,
+    groundRollDrag: 0.012,
+    takeoffAccelScale: 0.0,
+    controlInertia: 0.12,
+    gePeak: 0.15,
+    earlyLiftBlock: false,
+    requireFlapsToRotate: false,
+controlLayout: {
       pages: [
         { id: 'PRIMARY', controls: ['FLAPS', 'SPOILERS', 'GEAR', 'BRAKE'] },
         { id: 'SYS', controls: ['BALLAST', 'TRIM'] }
@@ -977,7 +1060,16 @@ export const AIRCRAFT = [
     flareAssistDefault: true,
     parkCapable: true,
     hoverGateAgl: 2.5,
-    controlLayout: {
+        windSense: 0.8,
+    dutchRoll: 0.0,
+    weathervane: 0.6,
+    groundRollDrag: 0.04,
+    takeoffAccelScale: 1.0,
+    controlInertia: 0.2,
+    gePeak: 0.2,
+    earlyLiftBlock: false,
+    requireFlapsToRotate: false,
+controlLayout: {
       pages: [
         { id: 'PRIMARY', controls: ['BRAKE', 'TRIM'] }
       ]
