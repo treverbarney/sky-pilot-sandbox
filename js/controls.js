@@ -17,6 +17,10 @@ const CONTROL_META = {
   BALLAST: { el: 'btn-ballast', type: 'btn' },
   WATER: { el: 'btn-water', type: 'btn' },
   TOGA: { el: 'btn-toga', type: 'btn' },
+  HOLD: { el: 'btn-hold', type: 'btn' },
+  GA: { el: 'btn-ga', type: 'btn' },
+  AUTOBRAKE: { el: 'btn-autobrake', type: 'btn' },
+  NAV: { el: 'btn-nav', type: 'btn' },
   SMOKE: { el: 'btn-smoke', type: 'btn' },
   TRIM: { el: 'trim-group', type: 'group' }
 };
@@ -47,9 +51,13 @@ export class Controls {
     this.trim = 0;
     this.smokeOn = false;
     this.parkBrake = false;
+    this.park = false;
     this.autobrakeLevel = 0;
-    this.flareAssist = false;
+    this.autobrake = 0;
+    this.flareAssist = true;
+    this.navLights = true;
     this.goAroundActive = false;
+    this.goAround = false;
     this.motionEnabled = false;
     this.motionMsg = 'Motion not enabled';
     this.cameraMode = 0;
@@ -279,6 +287,24 @@ export class Controls {
       this._updateGearLabel();
     });
     this._bindToggle(els.toga, () => this._fireToga());
+    this._bindToggle(els.hold, () => {
+      this.park = !this.park;
+      this.parkBrake = this.park;
+      if (this.park) {
+        this.throttle = 0;
+        this.brakes = true;
+        this._brakeLatched = true;
+        if (this.els?.throttle) this.els.throttle.value = 0;
+      }
+      this._syncBtn('btn-hold', this.park);
+      this._syncBtn('btn-brake', this.brakes || this.park);
+    });
+    this._bindToggle(els.ga, () => this._fireGoAround());
+    this._bindToggle(els.autobrake, () => this._cycleAutobrake());
+    this._bindToggle(els.nav, () => {
+      this.navLights = !this.navLights;
+      this._syncBtn('btn-nav', this.navLights);
+    });
 
     // Smoke: hold
     if (els.smoke) {
@@ -413,6 +439,27 @@ export class Controls {
 
   _cycleAutobrake() {
     this.autobrakeLevel = (this.autobrakeLevel + 1) % 3;
+    this.autobrake = this.autobrakeLevel;
+    const el = document.getElementById('btn-autobrake');
+    if (el) {
+      el.classList.toggle('on', this.autobrakeLevel > 0);
+      el.textContent = this.autobrakeLevel === 0 ? 'A/B OFF' : this.autobrakeLevel === 1 ? 'A/B LO' : 'A/B MED';
+    }
+  }
+
+  _fireGoAround() {
+    this._fireToga();
+    this.spoilers = false;
+    this.park = false;
+    this.parkBrake = false;
+    this.goAroundActive = true;
+    this._syncBtn('btn-spoilers', false);
+    this._syncBtn('btn-hold', false);
+    const ga = document.getElementById('btn-ga');
+    if (ga) {
+      ga.classList.add('on');
+      setTimeout(() => ga.classList.remove('on'), 400);
+    }
   }
 
   _bindToggle(el, fn) {
@@ -538,6 +585,17 @@ export class Controls {
       const el = document.getElementById(id);
       if (el) el.classList.remove('hidden');
     });
+    const hold = document.getElementById('btn-hold');
+    if (hold) hold.classList.remove('hidden');
+    const nav = document.getElementById('btn-nav');
+    if (nav) nav.classList.remove('hidden');
+    const ga = document.getElementById('btn-ga');
+    if (ga) ga.classList.toggle('hidden', !(set.has('TOGA') || this.spec?.diff === 'hard' || this.spec?.diff === 'expert'));
+    const abk = document.getElementById('btn-autobrake');
+    if (abk) {
+      const jet = this.spec?.type === 'jet' || this.spec?.type === 'airliner' || this.spec?.id === 'airliner' || this.spec?.id === 'privatejet';
+      abk.classList.toggle('hidden', !jet);
+    }
   }
 
   /** Show/hide controls for selected aircraft */
@@ -653,6 +711,10 @@ export class Controls {
     if (this.keys['KeyE']) r += 1;
     if (this.keys['KeyR']) this.throttle = Math.min(1, this.throttle + 0.01);
     if (this.keys['KeyF']) this.throttle = Math.max(0, this.throttle - 0.01);
+    if (this.throttle > 0.08 && this.park) {
+      this.park = false;
+      this._syncBtn('btn-hold', false);
+    }
     if (this.spec?.isHeli) {
       if (this.keys['KeyR']) this.collective = Math.min(1, this.collective + 0.008);
       if (this.keys['KeyF']) this.collective = Math.max(0, this.collective - 0.008);
@@ -718,10 +780,13 @@ export class Controls {
     fm.trim = this.trim;
     fm.collective = this.collective;
     fm.smokeOn = this.smokeOn;
-    fm.parkBrake = this.parkBrake;
-    fm.autobrakeLevel = this.autobrakeLevel;
-    fm.flareAssist = this.flareAssist;
+    fm.parkBrake = this.parkBrake || this.park;
+    fm.park = this.park || this.parkBrake;
+    fm.autobrakeLevel = this.autobrakeLevel || this.autobrake || 0;
+    fm.autobrake = fm.autobrakeLevel;
+    fm.flareAssist = this.flareAssist !== false;
     fm.goAroundActive = this.goAroundActive;
+    fm.navLights = this.navLights !== false;
     this._onGroundHint = !!fm.onGround;
   }
 }

@@ -240,6 +240,12 @@ export class FlightModel {
     this.euler.z += rollCmd * dt;
     this.euler.x += pitchCmd * dt;
     this.euler.y += yawCmd * dt;
+    // Nosewheel / tailwheel: rudder steers more with groundspeed
+    if (this.onGround) {
+      const gs = Math.hypot(this.velocity.x, this.velocity.z);
+      const steer = this.rudder * (0.35 + Math.min(1.4, gs * 0.035));
+      this.euler.y += steer * dt;
+    }
 
     if (!s.thrustVector && s.type !== 'aerobatic' && s.type !== 'fighter' && !s.isHeli) {
       this.euler.x = THREE.MathUtils.clamp(this.euler.x, -1.2, 1.2);
@@ -424,21 +430,21 @@ export class FlightModel {
 
     // Ground friction / brakes / reverse / park / autobrake
     let fric = 0.988;
-    if (this.parkBrake) {
+    if (this.parkBrake || this.park) {
       fric = 0.72;
       this.throttle = Math.min(this.throttle, 0.02);
     } else if (this.brakes) {
       fric = 0.86;
     }
-    if (this._autobrakeActive && this.autobrakeLevel > 0 && !this.reverse) {
-      fric *= this.autobrakeLevel >= 2 ? 0.90 : 0.94;
+    if (this._autobrakeActive && (this.autobrakeLevel || this.autobrake) > 0 && !this.reverse) {
+      fric *= (this.autobrakeLevel || this.autobrake) >= 2 ? 0.90 : 0.94;
     }
     if (this.reverse && this.throttle > 0.05) {
       fric *= 0.92;
       this._autobrakeActive = false;
     }
     if (this.spoilers && wasGround === false) fric *= 0.95;
-    if (this.throttle < 0.05 && !this.reverse && !this.parkBrake) fric *= 0.997;
+    if (this.throttle < 0.05 && !this.reverse && !this.parkBrake && !this.park) fric *= 0.997;
     if (s.mass > 20000) fric *= this.brakes ? 0.98 : 0.995;
     this.velocity.x *= fric;
     this.velocity.z *= fric;
@@ -881,12 +887,20 @@ export class FlightModel {
 
       // Ground effect — strong below ~20 ft (6.1 m)
       const GE_CEIL = 6.1;
+      let ge = 0;
       if (agl < GE_CEIL && agl > 0) {
-        const t = 1 - agl / GE_CEIL;
+        ge = 1 - agl / GE_CEIL;
         const isGA = s.type === 'prop' || s.diff === 'easy' || s.canWater;
         const isFighter = s.type === 'fighter' || s.type === 'experimental';
         const peak = isFighter ? 0.10 : (isGA ? 0.18 : 0.14);
-        Cl *= 1 + peak * t;
+        Cl *= 1 + peak * ge;
+      }
+
+      // Flare window: nose-up bleeds sink (stronger on easy types)
+      if (this.approachPhase === 'flare_window' && this.euler.x > 0.04 && this.velocity.y < 0) {
+        const easy = (s.diff === 'easy' || s.diff === 'med');
+        const assist = (this.flareAssist !== false && easy) ? 1.55 : 1.12;
+        this.velocity.y *= Math.pow(0.42, dt * assist);
       }
 
       const q = 0.5 * rho * speed * speed;
@@ -905,9 +919,8 @@ export class FlightModel {
 
       let Cd = s.drag + this.flaps * s.flapDrag + (this.gearDown && s.gearRetractable ? s.gearDrag : 0);
       if (this.spoilers) Cd += s.spoilerDrag || 0.1;
-      // Induced drag approx (cut ~10% in ground-effect band)
       let kInd = 0.04;
-      if (agl < 6.1 && agl > 0) kInd *= 0.90;
+      if (ge > 0) kInd *= 0.90;
       Cd += (Cl * Cl) * kInd;
       // Glider: exceptionally clean
       if (s.type === 'glider' && !this.spoilers) Cd = Math.min(Cd, s.drag + this.flaps * s.flapDrag * 0.5 + Cl * Cl * 0.025);

@@ -125,6 +125,10 @@ async function bootGraphics() {
       ballast: document.getElementById('btn-ballast'),
       water: document.getElementById('btn-water'),
       toga: document.getElementById('btn-toga'),
+      ga: document.getElementById('btn-ga'),
+      hold: document.getElementById('btn-hold'),
+      autobrake: document.getElementById('btn-autobrake'),
+      nav: document.getElementById('btn-nav'),
       smoke: document.getElementById('btn-smoke'),
       trimUp: document.getElementById('btn-trim-up'),
       trimDn: document.getElementById('btn-trim-dn'),
@@ -336,6 +340,16 @@ function syncMesh() {
   craftMesh.traverse((o) => {
     if (o.name === 'gear') o.visible = flight.gearDown;
   });
+  const strobe = craftMesh.getObjectByName('navStrobe');
+  const navRed = craftMesh.getObjectByName('navRed');
+  const navGreen = craftMesh.getObjectByName('navGreen');
+  const lights = controls?.navLights !== false;
+  if (navRed) navRed.visible = lights;
+  if (navGreen) navGreen.visible = lights;
+  if (strobe) {
+    strobe.visible = lights;
+    if (lights) strobe.scale.setScalar(0.7 + 0.5 * Math.abs(Math.sin(performance.now() * 0.008)));
+  }
 }
 
 function tryEject() {
