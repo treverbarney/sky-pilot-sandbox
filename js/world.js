@@ -453,29 +453,209 @@ export function createWorld(scene, opts = {}) {
   }
   root.add(city);
 
-  // Trees near lake — fewer on Low
-  const trunkM = makeFarLambert(0x5a3a20);
-  const leafM = [
-    makeFarLambert(0x2d6b2a),
-    makeFarLambert(0x3a7a32),
-    makeFarLambert(0x245a28)
-  ];
-  const treeCount = qualityKey === 'low' ? 36 : 70;
-  for (let i = 0; i < treeCount; i++) {
-    const ang = Math.random() * Math.PI * 2;
-    const rad = WORLD.lake.r + 35 + Math.random() * 140;
-    const tx = WORLD.lake.x + Math.cos(ang) * rad;
-    const tz = WORLD.lake.z + Math.sin(ang) * rad;
-    const th = 3.5 + Math.random() * 2;
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.55, th, 5), trunkM);
-    trunk.position.set(tx, th / 2, tz);
-    root.add(trunk);
-    const leaf = new THREE.Mesh(
-      new THREE.ConeGeometry(2.2 + Math.random(), 5 + Math.random() * 3, 6),
-      leafM[i % 3]
+
+  // Terminal building (passenger hall) near hangar apron
+  const terminal = new THREE.Group();
+  const termMat = useStd
+    ? makeToonPbr({
+        color: 0xd8e0ea,
+        map: tex.facade || null,
+        roughness: 0.6,
+        metalness: 0.08,
+        envMapIntensity: 0.35
+      })
+    : makeFarLambert(0xd8e0ea, tex.facade || null);
+  const termBody = new THREE.Mesh(new THREE.BoxGeometry(70, 10, 22), termMat);
+  termBody.position.y = 5;
+  terminal.add(termBody);
+  const termGlass = new THREE.Mesh(
+    new THREE.BoxGeometry(60, 6, 0.4),
+    useStd
+      ? makeToonPbr({
+          color: 0x6ec8f0,
+          emissive: 0x2a6a90,
+          emissiveIntensity: 0.25,
+          roughness: 0.2,
+          metalness: 0.15,
+          transparent: true,
+          opacity: 0.75,
+          envMapIntensity: 0.65
+        })
+      : makeFarLambert(0x6ec8f0)
+  );
+  termGlass.position.set(0, 5, 11.2);
+  terminal.add(termGlass);
+  const termRoof = new THREE.Mesh(
+    new THREE.BoxGeometry(74, 1.2, 26),
+    useStd
+      ? makeToonPbr({ color: 0x3a4a5c, roughness: 0.5, metalness: 0.35 })
+      : makeFarLambert(0x3a4a5c)
+  );
+  termRoof.position.y = 10.6;
+  terminal.add(termRoof);
+  terminal.position.set(WORLD.hangar.x + 95, 0, WORLD.hangar.z + 10);
+  root.add(terminal);
+
+  // PAPI — 4-box glide path lights (white / red readable)
+  const papiGroup = new THREE.Group();
+  const papiColors = [0xff2222, 0xff2222, 0xffffff, 0xffffff];
+  for (let i = 0; i < 4; i++) {
+    const col = papiColors[i];
+    const box = new THREE.Mesh(
+      new THREE.BoxGeometry(1.4, 0.7, 1.4),
+      new THREE.MeshStandardMaterial({
+        color: col,
+        emissive: col,
+        emissiveIntensity: 1.1,
+        roughness: 0.35,
+        metalness: 0.1
+      })
     );
-    leaf.position.set(tx, th + 2.2, tz);
-    root.add(leaf);
+    box.position.set(WORLD.runway.halfW + 14 + i * 3.2, 0.9, -WORLD.runway.halfL + 180);
+    papiGroup.add(box);
+  }
+  root.add(papiGroup);
+
+  // Road from airport apron toward city
+  const roadMat = useStd
+    ? makeToonPbr({ color: 0x2e2e36, roughness: 0.92, metalness: 0.02 })
+    : makeFarLambert(0x2e2e36);
+  const road = new THREE.Mesh(new THREE.PlaneGeometry(14, 520), roadMat);
+  road.rotation.x = -Math.PI / 2;
+  road.position.set(-220, 0.28, 160);
+  road.rotation.z = -0.55;
+  root.add(road);
+  const centerline = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.45, 500),
+    new THREE.MeshBasicMaterial({ color: 0xffee88 })
+  );
+  centerline.rotation.x = -Math.PI / 2;
+  centerline.position.set(-220, 0.35, 160);
+  centerline.rotation.z = -0.55;
+  root.add(centerline);
+
+  // Lake dock
+  const dock = new THREE.Group();
+  const wood = useStd
+    ? makeToonPbr({ color: 0x8a6540, roughness: 0.85, metalness: 0.05 })
+    : makeFarLambert(0x8a6540);
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(8, 0.45, 36), wood);
+  deck.position.set(0, 1.9, 0);
+  dock.add(deck);
+  for (const z of [-14, -4, 6, 14]) {
+    for (const x of [-3.2, 3.2]) {
+      const pile = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.4, 3.2, 6), wood);
+      pile.position.set(x, 0.6, z);
+      dock.add(pile);
+    }
+  }
+  dock.position.set(WORLD.lake.x - WORLD.lake.r + 8, 0, WORLD.lake.z);
+  root.add(dock);
+
+  // Parked GA on apron (static props)
+  const parkedMat = useStd
+    ? makeToonPbr({ color: 0xf2f4f8, roughness: 0.65, metalness: 0.08, envMapIntensity: 0.4 })
+    : makeFarLambert(0xf2f4f8);
+  const parkedAccent = useStd
+    ? makeToonPbr({ color: 0x3d8cff, roughness: 0.55, metalness: 0.05 })
+    : makeFarLambert(0x3d8cff);
+  for (let i = 0; i < 4; i++) {
+    const ga = new THREE.Group();
+    const fus = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.55, 4.2, 8), parkedMat);
+    fus.rotation.z = Math.PI / 2;
+    fus.position.y = 1.1;
+    ga.add(fus);
+    const wing = new THREE.Mesh(new THREE.BoxGeometry(7.2, 0.12, 1.1), parkedAccent);
+    wing.position.y = 1.25;
+    ga.add(wing);
+    const tail = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.1, 0.8), parkedAccent);
+    tail.position.set(-1.8, 1.7, 0);
+    ga.add(tail);
+    ga.position.set(WORLD.hangar.x + 25 + i * 18, 0, WORLD.hangar.z + 38);
+    ga.rotation.y = Math.PI * 0.15 * (i % 2 === 0 ? 1 : -1);
+    root.add(ga);
+  }
+
+  // Taxi / threshold lights extras (blue taxi) — instanced
+  {
+    const taxiN = qualityKey === 'low' ? 16 : 28;
+    const tGeo = new THREE.SphereGeometry(0.35, 5, 4);
+    const tMat = new THREE.MeshStandardMaterial({
+      color: 0x4488ff,
+      emissive: 0x2266ee,
+      emissiveIntensity: 0.9,
+      roughness: 0.4,
+      metalness: 0.1
+    });
+    const tLights = new THREE.InstancedMesh(tGeo, tMat, taxiN);
+    const td = new THREE.Object3D();
+    for (let i = 0; i < taxiN; i++) {
+      td.position.set(-40 + (i % 2) * 12, 0.55, -110 + Math.floor(i / 2) * 8);
+      td.updateMatrix();
+      tLights.setMatrixAt(i, td.matrix);
+    }
+    tLights.instanceMatrix.needsUpdate = true;
+    root.add(tLights);
+  }
+
+
+  // Trees — InstancedMesh trunks + crowns (draw-call friendly)
+  {
+    const treeCount = qualityKey === 'low' ? 40 : qualityKey === 'high' ? 90 : 64;
+    const trunkGeo = new THREE.CylinderGeometry(0.35, 0.55, 1, 5);
+    const leafGeo = new THREE.ConeGeometry(2.2, 5, 6);
+    const trunkM = makeFarLambert(0x5a3a20);
+    const leafM = makeFarLambert(0x2d6b2a);
+    const trunks = new THREE.InstancedMesh(trunkGeo, trunkM, treeCount);
+    const leaves = new THREE.InstancedMesh(leafGeo, leafM, treeCount);
+    const td = new THREE.Object3D();
+    for (let i = 0; i < treeCount; i++) {
+      const ang = (i / treeCount) * Math.PI * 2 + (i % 7) * 0.17;
+      const rad = WORLD.lake.r + 35 + ((i * 47) % 140);
+      const tx = WORLD.lake.x + Math.cos(ang) * rad;
+      const tz = WORLD.lake.z + Math.sin(ang) * rad;
+      const th = 3.5 + ((i * 13) % 20) * 0.1;
+      td.position.set(tx, th / 2, tz);
+      td.scale.set(1, th, 1);
+      td.rotation.set(0, 0, 0);
+      td.updateMatrix();
+      trunks.setMatrixAt(i, td.matrix);
+      td.position.set(tx, th + 2.2, tz);
+      const s = 1 + ((i % 5) * 0.08);
+      td.scale.set(s, s, s);
+      td.updateMatrix();
+      leaves.setMatrixAt(i, td.matrix);
+    }
+    trunks.instanceMatrix.needsUpdate = true;
+    leaves.instanceMatrix.needsUpdate = true;
+    root.add(trunks);
+    root.add(leaves);
+  }
+
+  // Extra tree band along road (instanced)
+  {
+    const n = qualityKey === 'low' ? 12 : 24;
+    const trunkGeo = new THREE.CylinderGeometry(0.3, 0.45, 3.2, 5);
+    const leafGeo = new THREE.ConeGeometry(1.8, 4.2, 6);
+    const trunks = new THREE.InstancedMesh(trunkGeo, makeFarLambert(0x4a3018), n);
+    const leaves = new THREE.InstancedMesh(leafGeo, makeFarLambert(0x3a7a32), n);
+    const td = new THREE.Object3D();
+    for (let i = 0; i < n; i++) {
+      const t = i / Math.max(1, n - 1);
+      const x = -80 + t * (-280);
+      const z = -40 + t * 380;
+      td.position.set(x - 10, 1.6, z);
+      td.scale.set(1, 1, 1);
+      td.updateMatrix();
+      trunks.setMatrixAt(i, td.matrix);
+      td.position.set(x - 10, 4.2, z);
+      td.updateMatrix();
+      leaves.setMatrixAt(i, td.matrix);
+    }
+    trunks.instanceMatrix.needsUpdate = true;
+    leaves.instanceMatrix.needsUpdate = true;
+    root.add(trunks);
+    root.add(leaves);
   }
 
   // Balloon & rocket pads + pulsing rings

@@ -12,7 +12,7 @@ export function getQualityKey() {
     const k = localStorage.getItem('skyPilotQuality');
     if (k && QUALITY[k]) return k;
   } catch (_) { /* ignore */ }
-  return 'medium';
+  return 'high';
 }
 
 export function setQualityKey(k) {
