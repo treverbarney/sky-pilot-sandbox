@@ -57,6 +57,13 @@ export class FlightModel {
     this._unstableWarned = false;
     this._flareCueShown = false;
     this.smokeOn = false;
+    this.parkBrake = false;
+    this.autobrakeLevel = 0;
+    this.flareAssist = false;
+    this.goAroundActive = false;
+    this._goAroundClimbTime = 0;
+    this._autobrakeActive = false;
+    this._passedStableGate = false;
     this._tmp = new THREE.Vector3();
     this._fwd = new THREE.Vector3();
     this._up = new THREE.Vector3();
@@ -109,6 +116,13 @@ export class FlightModel {
     this._unstableWarned = false;
     this._flareCueShown = false;
     this.smokeOn = false;
+    this.parkBrake = false;
+    this.autobrakeLevel = 0;
+    this.flareAssist = false;
+    this.goAroundActive = false;
+    this._goAroundClimbTime = 0;
+    this._autobrakeActive = false;
+    this._passedStableGate = false;
   }
 
   setAttitudeInputs(aileron, elevator, rudder) {
@@ -193,6 +207,10 @@ export class FlightModel {
       takeoffConfigOk: this.takeoffConfigOk,
       rotateReady: this.rotateReady,
       smokeOn: this.smokeOn,
+      parkBrake: this.parkBrake,
+      autobrakeLevel: this.autobrakeLevel,
+      flareAssist: this.flareAssist,
+      goAroundActive: this.goAroundActive,
       ...extra
     };
   }
@@ -203,11 +221,21 @@ export class FlightModel {
     dt = Math.min(dt, 0.05);
     const mass = this.getEffectiveMass();
 
-    // Attitude rates — damp on ground
+    // Attitude rates — damp on ground; nosewheel steers yaw on wheels
     const gndMul = this.onGround ? (this.getSpeed() < 5 ? 0.15 : 0.45) : 1;
     const rollCmd = this.aileron * s.rollRate * gndMul;
-    const pitchCmd = (this.elevator + this.trim) * s.pitchRate * (this.onGround ? 0.5 : 1);
-    const yawCmd = this.rudder * s.yawRate * (this.onGround ? 1.2 : 1);
+    let pitchInput = this.elevator + this.trim;
+    if (this.flareAssist && !this.onGround && this.approachPhase === 'flare_window') {
+      pitchInput += (s.diff === 'easy' ? 0.12 : 0.07);
+    }
+    const pitchCmd = pitchInput * s.pitchRate * (this.onGround ? 0.5 : 1);
+    const spdNow = this.getSpeed();
+    let yawMul = 1;
+    if (this.onGround && !s.isHeli) {
+      const nw = Math.min(1, Math.max(0, (spdNow - 2) / 18));
+      yawMul = 1.0 + 1.6 * nw;
+    }
+    const yawCmd = this.rudder * s.yawRate * (this.onGround ? yawMul : 1);
 
     this.euler.z += rollCmd * dt;
     this.euler.x += pitchCmd * dt;
@@ -227,6 +255,33 @@ export class FlightModel {
     const agl = this.position.y - terrainHeight;
     this._updateApproachPhase(agl, dt);
     this._updateTakeoffGates();
+    this._updateGoAround(dt, agl);
+
+    // Nosewheel: align ground-track with heading when rolling
+    if (this.onGround && !s.isHeli && speed > 2 && Math.abs(this.rudder) > 0.02) {
+      const hdg = this.euler.y;
+      const desired = new THREE.Vector3(Math.sin(hdg), 0, Math.cos(hdg));
+      const horiz = new THREE.Vector3(this.velocity.x, 0, this.velocity.z);
+      const hs = horiz.length();
+      if (hs > 0.5) {
+        const blend = Math.min(0.35, 0.08 + hs * 0.008) * Math.abs(this.rudder) * dt * 60;
+        horiz.normalize().lerp(desired, Math.min(1, blend)).multiplyScalar(hs);
+        this.velocity.x = horiz.x;
+        this.velocity.z = horiz.z;
+      }
+    }
+
+    // Flare sink bleed: nose-up in flare window damps descent
+    if (!this.onGround && !s.isHeli && this.approachPhase === 'flare_window' && this.velocity.y < -0.2) {
+      const noseUp = (-this.euler.x) > 0.04;
+      const elevUp = (this.elevator + this.trim) < -0.05;
+      if (noseUp || elevUp) {
+        let bleed = s.diff === 'easy' ? 1.7 : (s.diff === 'med' ? 1.4 : 1.15);
+        if (this.throttle <= (s.flareIdleThr ?? 0.2)) bleed *= 1.25;
+        if (this.flareAssist) bleed *= 1.15;
+        this.velocity.y *= Math.pow(1 / bleed, dt * 4);
+      }
+    }
     const wasGround = this.onGround;
     this.onWater = false;
     this._force.set(0, 0, 0);
@@ -341,6 +396,23 @@ export class FlightModel {
           vert, gs, score
         };
       }
+      // Airliner hard-gate: unstable OR flaps not full OR gear up OR spoilers not armed → crash
+      if (s.id === 'airliner' || s.landHardGate) {
+        const flapsFull = this.flaps >= (s.flapLanding ?? 0.95) - 0.05;
+        const gearOk = !s.gearRetractable || this.gearDown;
+        const armed = !!(this.spoilersArmed || this.spoilers);
+        const stableOk = this.stableApproach === true || this._passedStableGate;
+        if (!flapsFull || !gearOk || !armed || !stableOk) {
+          const reason = !gearOk ? 'gear up'
+            : !flapsFull ? 'flaps not full'
+            : !armed ? 'spoilers not armed'
+            : 'unstable approach';
+          this.alive = false;
+          if (score) { score.fail = true; score.reason = reason; score.issues = [reason, ...(score.issues || [])]; }
+          return { event: 'crash', reason, vert, gs, score };
+        }
+      }
+
       // Config fails for hard/med aircraft
       if (score.fail && (s.enforceGear || s.enforceFlapsLanding || s.diff === 'hard' || s.diff === 'expert')) {
         this.alive = false;
@@ -350,13 +422,23 @@ export class FlightModel {
 
     this.velocity.y = Math.max(0, this.velocity.y);
 
-    // Ground friction / brakes / reverse
+    // Ground friction / brakes / reverse / park / autobrake
     let fric = 0.988;
-    if (this.brakes) fric = 0.86;
-    if (this.reverse && this.throttle > 0.05) fric *= 0.92;
-    if (this.spoilers && wasGround === false) fric *= 0.95; // auto dump lift feel
-    if (this.throttle < 0.05 && !this.reverse) fric *= 0.997;
-    // Rolling resistance scales with mass feel
+    if (this.parkBrake) {
+      fric = 0.72;
+      this.throttle = Math.min(this.throttle, 0.02);
+    } else if (this.brakes) {
+      fric = 0.86;
+    }
+    if (this._autobrakeActive && this.autobrakeLevel > 0 && !this.reverse) {
+      fric *= this.autobrakeLevel >= 2 ? 0.90 : 0.94;
+    }
+    if (this.reverse && this.throttle > 0.05) {
+      fric *= 0.92;
+      this._autobrakeActive = false;
+    }
+    if (this.spoilers && wasGround === false) fric *= 0.95;
+    if (this.throttle < 0.05 && !this.reverse && !this.parkBrake) fric *= 0.997;
     if (s.mass > 20000) fric *= this.brakes ? 0.98 : 0.995;
     this.velocity.x *= fric;
     this.velocity.z *= fric;
@@ -369,6 +451,10 @@ export class FlightModel {
 
     // Auto-deploy armed spoilers on touch (airliner)
     if (!wasGround && this.spoilersArmed) this.spoilers = true;
+    if (!wasGround && this.airborneTime > 1.5 && this.autobrakeLevel > 0) {
+      this._autobrakeActive = true;
+    }
+    if (!wasGround) this.goAroundActive = false;
 
     if (!wasGround && this.airborneTime > 2) {
       return { event: 'touchdown', vert, gs, score: this.lastTouchScore };
@@ -425,11 +511,17 @@ export class FlightModel {
 
     if (s.hasMixture) {
       if (this.mixtureRich) { points += 3; breakdown.config += 3; }
-      else { points -= 8; breakdown.config -= 8; issues.push('mixture lean'); }
+      else {
+        const pen = easy ? 3 : 8;
+        points -= pen; breakdown.config -= pen; issues.push('mixture lean');
+      }
     }
     if (s.hasProp) {
       if (this.propFull) { points += 3; breakdown.config += 3; }
-      else { points -= 8; breakdown.config -= 8; issues.push('prop not full'); }
+      else {
+        const pen = easy ? 3 : 8;
+        points -= pen; breakdown.config -= pen; issues.push('prop not full');
+      }
     }
     if (s.hasCondition) {
       if (this.conditionRun) { points += 3; breakdown.config += 3; }
@@ -637,6 +729,7 @@ export class FlightModel {
       const sinkOk = Math.abs(vs) <= 5.08;
       const cfgOk = this._landingConfigOk();
       this.stableApproach = bankOk && hdgOk && spdOk && sinkOk && cfgOk;
+      if (this.stableApproach) this._passedStableGate = true;
     }
 
     // Final approach sink advisory flag (for HUD)
@@ -786,10 +879,14 @@ export class FlightModel {
         Cl *= (1 - (s.spoilerLiftKill || 0.4));
       }
 
-      // Ground effect
-      const spanApprox = Math.sqrt(s.wingArea * 8);
-      if (agl < spanApprox && agl > 0) {
-        Cl *= 1 + 0.18 * (1 - agl / spanApprox);
+      // Ground effect — strong below ~20 ft (6.1 m)
+      const GE_CEIL = 6.1;
+      if (agl < GE_CEIL && agl > 0) {
+        const t = 1 - agl / GE_CEIL;
+        const isGA = s.type === 'prop' || s.diff === 'easy' || s.canWater;
+        const isFighter = s.type === 'fighter' || s.type === 'experimental';
+        const peak = isFighter ? 0.10 : (isGA ? 0.18 : 0.14);
+        Cl *= 1 + peak * t;
       }
 
       const q = 0.5 * rho * speed * speed;
@@ -808,8 +905,10 @@ export class FlightModel {
 
       let Cd = s.drag + this.flaps * s.flapDrag + (this.gearDown && s.gearRetractable ? s.gearDrag : 0);
       if (this.spoilers) Cd += s.spoilerDrag || 0.1;
-      // Induced drag approx
-      Cd += (Cl * Cl) * 0.04;
+      // Induced drag approx (cut ~10% in ground-effect band)
+      let kInd = 0.04;
+      if (agl < 6.1 && agl > 0) kInd *= 0.90;
+      Cd += (Cl * Cl) * kInd;
       // Glider: exceptionally clean
       if (s.type === 'glider' && !this.spoilers) Cd = Math.min(Cd, s.drag + this.flaps * s.flapDrag * 0.5 + Cl * Cl * 0.025);
 
