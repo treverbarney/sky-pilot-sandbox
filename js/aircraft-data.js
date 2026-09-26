@@ -38,8 +38,8 @@ export const AIRCRAFT = [
     flapTakeoffAlt: 0.66,
     flapLanding: 1,
     flapApproach: 0.66,
-    landSpeedMax: 35,
-    landVertMax: 3.5,
+    landSpeedMax: 38,
+    landVertMax: 3.8,
     stallAoA: 15 * Math.PI / 180,
     stallAoAFlaps: 13 * Math.PI / 180,
     runwayOnly: true,
@@ -50,15 +50,17 @@ export const AIRCRAFT = [
     ejectOk: true,
     size: 1.0,
     controls: ['THR', 'FLAPS', 'MIX', 'PROP', 'BRAKE', 'TRIM'],
-    flareStartAgl: 5.5,
-    flareHoldOffFloor: 0.4,
-    flareIdleThr: 0.15,
-    flarePitchMin: -0.06,
+    flareStartAgl: 6.5,
+    flareHoldOffFloor: 0.35,
+    flareIdleThr: 0.18,
+    flarePitchMin: -0.05,
     stableGateAgl: 152,
-    approachSpeedMin: 32,
-    approachSpeedMax: 38,
-    tdzPreferMax: 600,
+    approachSpeedMin: 30,
+    approachSpeedMax: 42,
+    tdzPreferMax: 650,
     requireSpoilersArmed: false,
+    flareAssistDefault: true,
+    parkCapable: true,
     controlLayout: {
       pages: [
         { id: 'PRIMARY', controls: ['FLAPS', 'BRAKE', 'TRIM'] },
@@ -157,6 +159,9 @@ export const AIRCRAFT = [
     approachSpeedMax: 55,
     tdzPreferMax: 450,
     requireSpoilersArmed: true,
+    flareAssistDefault: true,
+    autobrakeCapable: true,
+    parkCapable: true,
     controlLayout: {
       pages: [
         { id: 'PRIMARY', controls: ['FLAPS', 'GEAR', 'BRAKE', 'SPOILERS'] },
@@ -259,6 +264,10 @@ export const AIRCRAFT = [
     approachSpeedMax: 80,
     tdzPreferMax: 400,
     requireSpoilersArmed: true,
+    landHardGate: true,
+    flareAssistDefault: false,
+    autobrakeCapable: true,
+    parkCapable: true,
     controlLayout: {
       pages: [
         { id: 'PRIMARY', controls: ['FLAPS', 'GEAR', 'BRAKE', 'SPOILERS'] },
@@ -362,6 +371,8 @@ export const AIRCRAFT = [
     approachSpeedMax: 90,
     tdzPreferMax: 500,
     requireSpoilersArmed: false,
+    flareAssistDefault: false,
+    parkCapable: true,
     controlLayout: {
       pages: [
         { id: 'PRIMARY', controls: ['FLAPS', 'GEAR', 'BRAKE', 'AB'] },
@@ -460,6 +471,8 @@ export const AIRCRAFT = [
     approachSpeedMax: 45,
     tdzPreferMax: 500,
     requireSpoilersArmed: false,
+    flareAssistDefault: false,
+    parkCapable: true,
     controlLayout: {
       pages: [
         { id: 'PRIMARY', controls: ['GEAR', 'TV', 'AB', 'BRAKE'] },
@@ -558,6 +571,8 @@ export const AIRCRAFT = [
     approachSpeedMax: 45,
     tdzPreferMax: 550,
     requireSpoilersArmed: false,
+    flareAssistDefault: true,
+    parkCapable: true,
     controlLayout: {
       pages: [
         { id: 'PRIMARY', controls: ['FLAPS', 'GEAR', 'WATER', 'BRAKE'] },
@@ -657,6 +672,8 @@ export const AIRCRAFT = [
     approachSpeedMax: 42,
     tdzPreferMax: 700,
     requireSpoilersArmed: false,
+    flareAssistDefault: true,
+    parkCapable: true,
     controlLayout: {
       pages: [
         { id: 'PRIMARY', controls: ['MIX', 'PROP', 'BRAKE', 'FLAPS'] },
@@ -752,6 +769,9 @@ export const AIRCRAFT = [
     approachSpeedMax: 75,
     tdzPreferMax: 700,
     requireSpoilersArmed: false,
+    flareAssistDefault: true,
+    autobrakeCapable: true,
+    parkCapable: true,
     controlLayout: {
       pages: [
         { id: 'PRIMARY', controls: ['FLAPS', 'GEAR', 'BRAKE', 'REV'] },
@@ -852,6 +872,8 @@ export const AIRCRAFT = [
     approachSpeedMax: 32,
     tdzPreferMax: 500,
     requireSpoilersArmed: false,
+    flareAssistDefault: false,
+    parkCapable: true,
     controlLayout: {
       pages: [
         { id: 'PRIMARY', controls: ['FLAPS', 'SPOILERS', 'GEAR', 'BRAKE'] },
@@ -952,6 +974,8 @@ export const AIRCRAFT = [
     approachSpeedMax: 15,
     tdzPreferMax: 900,
     requireSpoilersArmed: false,
+    flareAssistDefault: true,
+    parkCapable: true,
     hoverGateAgl: 2.5,
     controlLayout: {
       pages: [
