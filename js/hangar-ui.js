@@ -21,6 +21,8 @@ export function buildHangarGrid(gridEl, { onSelect, onInfo }) {
     card.className = `ac-card diff-${diff}${info.fictional ? ' fictional' : ''}`;
     card.style.setProperty('--ac-accent', accent);
     card.dataset.id = a.id;
+    card.dataset.diff = diff;
+    card.title = `${info.shortName || a.name} — ${DIFF_LABEL[diff] || diff}`;
     card.innerHTML = `
       <div class="ac-card-sil" aria-hidden="true">
         <svg viewBox="0 0 120 48" class="sil-svg">${sil}</svg>

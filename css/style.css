@@ -1352,3 +1352,34 @@ button, input {
   font-size: 0.75rem;
   padding: 0.4rem 0.65rem;
 }
+
+
+/* ART pass: 44px touch targets + hangar polish */
+.btn,
+.btn-card-fly,
+.btn-card-info,
+.ctrl-btn,
+.info-close,
+.info-actions .btn {
+  min-height: 44px;
+}
+.btn-card-info,
+.btn-card-fly {
+  min-height: 44px;
+  padding: 12px 8px;
+  font-size: 0.78rem;
+}
+.ctrl-tab {
+  min-height: 36px;
+  min-width: 44px;
+}
+.ac-card {
+  border-color: rgba(78, 194, 255, 0.2);
+}
+.ac-card-sil {
+  min-height: 58px;
+}
+.diff {
+  padding: 4px 8px;
+  font-size: 0.62rem;
+}
