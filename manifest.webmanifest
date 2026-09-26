@@ -1,0 +1,25 @@
+{
+  "name": "Sky Pilot Sandbox",
+  "short_name": "SkyPilot",
+  "description": "Phone-first flight sandbox \u2014 10 aircraft, parachute, vehicles, balloon & rocket",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#070d18",
+  "theme_color": "#070d18",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

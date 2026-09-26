@@ -1,0 +1,20 @@
+{
+  "name": "sky-pilot-sandbox",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Phone PWA flight sandbox — 10 aircraft, checklists, parachute, vehicles, balloon & rocket",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "vite"
+  },
+  "dependencies": {
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0",
+    "vite-plugin-pwa": "^0.21.0"
+  }
+}

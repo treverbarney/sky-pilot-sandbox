@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#070d18" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="description" content="Sky Pilot Sandbox — hangar, 10 aircraft, parachute, vehicles, balloon & rocket" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="stylesheet" href="css/style.css?v=5" />
+  <title>Sky Pilot Sandbox</title>
+  <!-- Vite resolves three from node_modules; for plain python -m http.server use the CDN importmap in README -->
+</head>
+<body>
+  <div id="app">
+    <canvas id="c"></canvas>
+
+    <!-- HUD -->
+    <div id="hud" class="hidden">
+      <div class="hud-top">
+        <div class="gauge" id="gauge-alt"><span id="alt">0</span><small>ALT ft</small></div>
+        <div class="gauge" id="gauge-spd"><span id="spd">0</span><small>KIAS</small></div>
+        <div class="gauge" id="gauge-vs"><span id="vs">0</span><small>fpm</small></div>
+        <div class="gauge ac-name"><span id="ac-label">—</span><small id="mode-label">AIR</small></div>
+      </div>
+      <div id="hud-config" class="hud-config" aria-live="polite"></div>
+      <div id="stall-warn" class="stall-warn hidden">STALL</div>
+      <div id="flare-cue" class="flare-cue hidden">FLARE · IDLE</div>
+      <div id="approach-cue" class="approach-cue hidden"></div>
+      <div class="minimap-label">MAP</div>
+      <canvas id="minimap" width="140" height="140" aria-label="Minimap"></canvas>
+      <div id="toast" class="toast hidden"></div>
+
+      <!-- Live checklist (flight depth) — styled by art CSS on #checklist -->
+      <div id="checklist" class="checklist-panel hidden" aria-live="polite">
+        <div class="checklist-head">
+          <h4 id="checklist-title">Checklist</h4>
+          <span id="checklist-phase" class="phase-tag">TAKEOFF</span>
+        </div>
+        <div id="checklist-vband" class="vband"></div>
+        <ul id="checklist-items"></ul>
+        <ol id="checklist-list" class="hidden" hidden></ol>
+      </div>
+    </div>
+
+    <!-- Flight controls overlay — PRIMARY/SYS paging via controls.js -->
+    <div id="controls" class="hidden">
+      <div class="col left">
+        <div class="throttle-wrap" id="throttle-wrap">
+          <label>THR</label>
+          <input type="range" id="throttle" min="0" max="100" value="0" orient="vertical" />
+        </div>
+        <div class="btn-col" id="sys-btns-left">
+          <!-- Primary-leaning flight controls; paging may hide/show -->
+          <button type="button" id="btn-flaps" class="ctrl-btn" data-on="0">FLAPS</button>
+          <button type="button" id="btn-gear" class="ctrl-btn on" data-on="1">GEAR</button>
+          <button type="button" id="btn-spoilers" class="ctrl-btn hidden">SPOILERS</button>
+          <button type="button" id="btn-brake" class="ctrl-btn">BRAKE</button>
+          <button type="button" id="btn-water" class="ctrl-btn hidden">LAND</button>
+          <button type="button" id="btn-ab" class="ctrl-btn hidden">AB</button>
+          <button type="button" id="btn-tv" class="ctrl-btn hidden">TV</button>
+        </div>
+      </div>
+      <div class="col right">
+        <div class="rudder-wrap">
+          <label>RUD</label>
+          <input type="range" id="rudder" min="-100" max="100" value="0" />
+        </div>
+        <div class="ctrl-pages">
+          <div id="ctrl-tabs" class="ctrl-tabs hidden" role="tablist" aria-label="Control pages">
+            <button type="button" class="ctrl-tab on" data-page="PRIMARY" role="tab">PRI</button>
+            <button type="button" class="ctrl-tab" data-page="SYS" role="tab">SYS</button>
+            <button type="button" class="ctrl-tab hidden" data-page="PROC" role="tab">PROC</button>
+          </div>
+          <div class="btn-col" id="sys-btns-right">
+            <div id="trim-group" class="trim-group">
+              <button type="button" id="btn-trim-up" class="ctrl-btn">TRIM▲</button>
+              <button type="button" id="btn-trim-dn" class="ctrl-btn">TRIM▼</button>
+            </div>
+            <button type="button" id="btn-mix" class="ctrl-btn hidden on">MIX RICH</button>
+            <button type="button" id="btn-prop" class="ctrl-btn hidden on">PROP FULL</button>
+            <button type="button" id="btn-cond" class="ctrl-btn hidden on">COND RUN</button>
+            <button type="button" id="btn-rev" class="ctrl-btn hidden">REV</button>
+            <button type="button" id="btn-arm" class="ctrl-btn hidden">ARM SPD</button>
+            <button type="button" id="btn-toga" class="ctrl-btn hidden">TOGA</button>
+            <button type="button" id="btn-smoke" class="ctrl-btn hidden hold-btn">SMOKE</button>
+            <button type="button" id="btn-ballast" class="ctrl-btn hidden">BALLAST</button>
+            <button type="button" id="btn-camera" class="ctrl-btn">CAM</button>
+            <button type="button" id="btn-eject" class="ctrl-btn danger">JUMP</button>
+            <button type="button" id="btn-help-flight" class="ctrl-btn">?</button>
+          </div>
+        </div>
+      </div>
+      <div id="heli-collective" class="heli-only hidden">
+        <label>COLL</label>
+        <input type="range" id="collective" min="0" max="100" value="40" />
+      </div>
+    </div>
+
+    <!-- Ground / parachute extras -->
+    <div id="ground-ui" class="hidden">
+      <button type="button" id="btn-swoop" class="ctrl-btn">SWOOP</button>
+      <button type="button" id="btn-dive" class="ctrl-btn">DIVE</button>
+      <button type="button" id="btn-bike" class="ctrl-btn">🏍 BIKE</button>
+      <button type="button" id="btn-car" class="ctrl-btn">🏎 CAR</button>
+      <button type="button" id="btn-teleport" class="ctrl-btn">✈ AIRPORT</button>
+    </div>
+
+    <!-- Hangar / menus -->
+    <div id="menu" class="overlay">
+      <div class="panel hangar">
+        <div class="hangar-header">
+          <div class="titles">
+            <div class="hangar-brand">
+              <span class="hangar-mark" aria-hidden="true">✈</span>
+              <h1>Sky Pilot</h1>
+            </div>
+            <p class="tagline">Hangar · 10 aircraft · procedures · chute · vehicles · pads</p>
+          </div>
+          <button id="btn-quality" type="button" class="btn btn-ghost" title="Graphics quality">GFX Med</button>
+          <button id="btn-help" type="button" class="btn btn-ghost" title="Help">Help</button>
+        </div>
+        <p id="status-msg" class="status">Enable motion on phone, then open Info or Fly.</p>
+        <div class="menu-actions">
+          <button id="btn-motion" type="button" class="btn btn-secondary">Enable motion</button>
+        </div>
+        <div id="aircraft-grid" class="aircraft-grid"></div>
+        <p class="hint">Tilt phone · PRI/SYS panels · WASD/QE · [ ] flaps · G gear · X spoilers · O arm · V AB · T TV · B brake · H reverse · 1 TOGA · M smoke</p>
+        <p class="hint dim">Checklists track takeoff/landing. Orange/red pads: balloon &amp; rocket.</p>
+      </div>
+    </div>
+
+    <!-- Art hangar info sheet (filled by hangar-ui.js) -->
+    <div id="info-sheet" class="overlay hidden" aria-modal="true"></div>
+
+    <!-- Help modal (filled by hangar-ui.js) -->
+    <div id="help-modal" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Help">
+      <div class="panel help-panel">
+        <header>
+          <h2>How to fly</h2>
+          <button type="button" class="info-close" data-help-close aria-label="Close">×</button>
+        </header>
+        <div class="help-body"></div>
+        <div class="help-footer">
+          <button type="button" class="btn btn-primary" data-help-close>Got it</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="crash" class="overlay hidden">
+      <div class="panel">
+        <h2>Impact</h2>
+        <p id="crash-msg">Hard landing.</p>
+        <button id="btn-retry" type="button" class="btn btn-primary">Retry same aircraft</button>
+        <button id="btn-hangar" type="button" class="btn btn-secondary">Back to hangar</button>
+        <button id="btn-respawn" type="button" class="btn btn-secondary">Teleport to airport</button>
+      </div>
+    </div>
+
+    <div id="landed" class="overlay hidden">
+      <div class="panel">
+        <h2>Landing success</h2>
+        <p id="land-msg">Nice greaser.</p>
+        <button id="btn-land-again" type="button" class="btn btn-primary">Fly again</button>
+        <button id="btn-land-hangar" type="button" class="btn btn-secondary">Hangar</button>
+        <button id="btn-land-explore" type="button" class="btn btn-secondary">Keep exploring</button>
+      </div>
+    </div>
+
+    <div id="loading" class="overlay">
+      <div class="panel">
+        <h2>Loading world…</h2>
+        <div class="bar"><div id="load-bar"></div></div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="js/main.js?v=5"></script>
+</body>
+</html>
