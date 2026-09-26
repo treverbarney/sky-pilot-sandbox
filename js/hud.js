@@ -85,10 +85,13 @@ export class HUD {
     if (cfg.stable === true) chips.push({ label: 'STABLE', on: true });
     if (cfg.stable === false) chips.push({ label: 'UNSTABLE', on: true, warn: true });
     if (cfg.flare) chips.push({ label: 'FLARE', on: true, warn: true });
-    if (cfg.rotate) chips.push({ label: 'Vr', on: true });
-    if (cfg.vrHint) chips.push({ label: cfg.vrHint, on: !!cfg.rotate });
-    if (cfg.vrefHint) chips.push({ label: cfg.vrefHint, on: !!cfg.flare });
-    if (cfg.flapHint) chips.push({ label: cfg.flapHint, on: true });
+    if (cfg.rotate) chips.push({ label: 'ROTATE', on: true });
+    // Always show this type's Vr / Vref / flap hint on takeoff roll & short final
+    if (cfg.showVSpeeds) {
+      if (cfg.vrHint) chips.push({ label: cfg.vrHint, on: !!cfg.rotate || !!cfg.takeoffPhase });
+      if (cfg.vrefHint) chips.push({ label: cfg.vrefHint, on: !!cfg.flare || !!cfg.shortFinal });
+      if (cfg.flapHint) chips.push({ label: cfg.flapHint, on: true });
+    }
     if (cfg.smoke) chips.push({ label: 'SMOKE', on: true });
     this.configEl.innerHTML = chips
       .map((c) => `<span class="chip${c.on ? ' on' : ''}${c.warn ? ' warn' : ''}">${c.label}</span>`)

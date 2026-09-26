@@ -261,9 +261,9 @@ export class Controls {
       if (els.cond) els.cond.textContent = this.conditionRun ? 'COND RUN' : 'COND CUT';
     });
     this._bindToggle(els.ab, () => {
-      if (!this.afterburner && this.throttle < 0.6) {
-        this.throttle = Math.max(this.throttle, 0.65);
-        if (this.els?.throttle) this.els.throttle.value = Math.round(this.throttle * 100);
+      // Afterburner only above 60% thr — no auto-bump
+      if (!this.afterburner && this.throttle < (this.spec?.abThrMin ?? 0.6)) {
+        return;
       }
       this.afterburner = !this.afterburner;
       this._syncBtn('btn-ab', this.afterburner);
@@ -385,6 +385,10 @@ export class Controls {
   }
 
   _fireToga() {
+    // Glider / noToga types have no go-around thrust path
+    if (this.spec?.noToga || this.spec?.type === 'glider' || !(this.spec?.maxThrust > 0)) {
+      return;
+    }
     this.throttle = 1;
     this.reverse = false;
     this.parkBrake = false;
@@ -770,6 +774,11 @@ export class Controls {
       this._syncBtn('btn-rev', false);
     }
     fm.reverse = this.reverse;
+    const abMin = this.spec?.abThrMin ?? 0.6;
+    if (this.afterburner && this.throttle <= abMin) {
+      this.afterburner = false;
+      this._syncBtn('btn-ab', false);
+    }
     fm.afterburner = this.afterburner;
     fm.thrustVectorOn = this.thrustVectorOn;
     fm.mixtureRich = this.mixtureRich;

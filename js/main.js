@@ -508,7 +508,10 @@ function updateCamera(dt, targetPos, targetQuat, speed) {
     const back = new THREE.Vector3(0, 0, -1).applyQuaternion(quat);
     const up = new THREE.Vector3(0, 1, 0);
     const desired = targetPos.clone().addScaledVector(back, 22 + Math.min(40, speed * 0.08)).addScaledVector(up, 8);
-    camera.position.lerp(desired, 1 - Math.pow(0.001, dt));
+    // Tiny speed-based camera lag (chase only) — higher speed → slightly softer follow
+    const lag = Math.min(0.012, speed * 0.000035);
+    const follow = Math.max(0.0004, 0.001 - lag);
+    camera.position.lerp(desired, 1 - Math.pow(follow, dt));
     const look = targetPos.clone().addScaledVector(new THREE.Vector3(0, 0, 1).applyQuaternion(quat), 20);
     look.y += 2;
     camera.lookAt(look);
@@ -518,6 +521,29 @@ function updateCamera(dt, targetPos, targetQuat, speed) {
 function updateHudConfig() {
   if (!flight) return;
   const flare = flight.approachPhase === 'flare_window';
+  const phase = flight.approachPhase;
+  const takeoffPhase = !!(flight.onGround && flight.airborneTime < 1);
+  const shortFinal = phase === 'short_final' || phase === 'flare_window';
+  const showVSpeeds = takeoffPhase || shortFinal || !!(flight.onGround && flight.rotateReady);
+  const flapLabel = (() => {
+    if (!currentSpec) return null;
+    if (takeoffPhase || flight.onGround) {
+      if (currentSpec.flapTakeoff == null) return null;
+      const labs = currentSpec.flapLabels;
+      const steps = currentSpec.flapSteps || [];
+      let li = steps.findIndex((v) => Math.abs(v - currentSpec.flapTakeoff) < 0.05);
+      const tip = (li >= 0 && labs?.[li]) ? labs[li] : `${Math.round(currentSpec.flapTakeoff * 100)}%`;
+      return `TO FLAPS ${tip}`;
+    }
+    if (shortFinal && currentSpec.flapLanding != null) {
+      const labs = currentSpec.flapLabels;
+      const steps = currentSpec.flapSteps || [];
+      let li = steps.findIndex((v) => Math.abs(v - currentSpec.flapLanding) < 0.05);
+      const tip = (li >= 0 && labs?.[li]) ? labs[li] : `${Math.round(currentSpec.flapLanding * 100)}%`;
+      return `LDG FLAPS ${tip}`;
+    }
+    return null;
+  })();
   hud.setConfig({
     flaps: flight.flaps ?? controls.flaps ?? 0,
     gear: flight.gearDown,
@@ -532,11 +558,12 @@ function updateHudConfig() {
     flare,
     rotate: !!(flight.onGround && flight.rotateReady),
     smoke: !!controls.smokeOn,
-    vrHint: currentSpec?.vr != null ? `Vr ${Math.round(currentSpec.vr * 1.94384)}` : null,
-    vrefHint: currentSpec?.vref != null ? `Vref ${Math.round(currentSpec.vref * 1.94384)}` : null,
-    flapHint: flight.onGround
-      ? (currentSpec?.flapTakeoff != null ? `TO FLAPS ${Math.round(currentSpec.flapTakeoff * 100)}%` : null)
-      : (currentSpec?.flapLanding != null ? `LDG FLAPS ${Math.round(currentSpec.flapLanding * 100)}%` : null)
+    showVSpeeds,
+    takeoffPhase,
+    shortFinal,
+    vrHint: (showVSpeeds && currentSpec?.vr != null) ? `Vr ${Math.round(currentSpec.vr * 1.94384)}` : null,
+    vrefHint: (showVSpeeds && currentSpec?.vref != null) ? `Vref ${Math.round(currentSpec.vref * 1.94384)}` : null,
+    flapHint: showVSpeeds ? flapLabel : null
   });
   const sw = document.getElementById('stall-warn');
   if (sw) sw.classList.toggle('hidden', !flight.stalling);

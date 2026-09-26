@@ -232,22 +232,30 @@ export class FlightModel {
     let auth = 0.32 + 0.68 * Math.min(1, spdNow / Math.max(12, vrRef * 0.85));
     auth = 1 - inertia * (1 - auth);
     if (s.id === 'cessna182' || s.diff === 'easy') auth = Math.max(auth, 0.88);
+    if (s.snappy || s.id === 'aerobatic') auth = Math.max(auth, 0.95);
     const gndMul = this.onGround ? (spdNow < 5 ? 0.15 : 0.45) : 1;
-    const rollCmd = this.aileron * s.rollRate * gndMul * auth;
+    let rollAuth = auth;
+    if (s.snappy || s.id === 'aerobatic') rollAuth = Math.min(1.15, auth * 1.12);
+    const rollCmd = this.aileron * s.rollRate * gndMul * rollAuth;
     let pitchInput = this.elevator + this.trim;
     if (this.flareAssist && !this.onGround && this.approachPhase === 'flare_window') {
       pitchInput += (s.diff === 'easy' ? 0.12 : 0.07);
     }
     let pitchSens = 1;
-    if (s.id === 'cessna182' || s.type === 'aerobatic') pitchSens = 1.28;
-    if (s.id === 'airliner' || s.id === 'cargo') pitchSens = 0.82;
+    if (s.id === 'cessna182' || s.type === 'aerobatic' || s.snappy) pitchSens = 1.28;
+    if (s.snappy || s.id === 'aerobatic') pitchSens = 1.42;
+    if (s.id === 'airliner' || s.id === 'cargo' || s.longRoll) pitchSens = 0.82;
     if (this.onWater && s.waterPitchDamp) pitchSens *= s.waterPitchDamp;
     const pitchCmd = pitchInput * s.pitchRate * (this.onGround ? 0.5 : 1) * auth * pitchSens;
+    // Light planes: strong rudder; airliner/cargo: heavy tiller (slow nosewheel)
     let yawMul = 1;
+    const nwAuth = s.nosewheelAuth ?? (s.tillerHeavy ? 0.3 : (s.mass < 2000 ? 1.35 : 0.7));
     if (this.onGround && !s.isHeli) {
       const nw = Math.min(1, Math.max(0, (spdNow - 2) / 18));
-      const tiller = s.id === 'airliner' || s.id === 'cargo' ? 0.45 : (s.id === 'cessna182' || s.type === 'aerobatic' ? 1.8 : 1.0);
-      yawMul = 1.0 + 1.6 * nw * tiller;
+      yawMul = (0.55 + 1.55 * nw) * nwAuth;
+      if (s.tillerHeavy || s.id === 'airliner' || s.id === 'cargo') {
+        yawMul *= 0.5 + 0.5 * Math.min(1, spdNow / 28);
+      }
     }
     const yawCmd = this.rudder * s.yawRate * (this.onGround ? yawMul : 1);
 
@@ -264,11 +272,11 @@ export class FlightModel {
       this.euler.z += rock * dt * 8;
       this.euler.y += rock * 0.35 * dt * 6;
     }
-    // Nosewheel / tailwheel: rudder steers more with groundspeed
+    // Nosewheel / tailwheel: rudder steers more with groundspeed (heavy tiller = slow)
     if (this.onGround) {
       const gs = Math.hypot(this.velocity.x, this.velocity.z);
-      const tiller = (s.id === 'airliner' || s.id === 'cargo') ? 0.4 : 1;
-      const steer = this.rudder * (0.35 + Math.min(1.4, gs * 0.035)) * tiller;
+      const nwAuth = s.nosewheelAuth ?? (s.tillerHeavy ? 0.3 : (s.mass < 2000 ? 1.35 : 0.7));
+      const steer = this.rudder * (0.35 + Math.min(1.4, gs * 0.035)) * nwAuth;
       this.euler.y += steer * dt;
     }
 
@@ -302,14 +310,15 @@ export class FlightModel {
       }
     }
 
-    // Flare sink bleed: nose-up in flare window damps descent
+    // Flare sink bleed: nose-up damps descent (firmFlare = less float / firmer)
     if (!this.onGround && !s.isHeli && this.approachPhase === 'flare_window' && this.velocity.y < -0.2) {
       const noseUp = (-this.euler.x) > 0.04;
       const elevUp = (this.elevator + this.trim) < -0.05;
       if (noseUp || elevUp) {
         let bleed = s.diff === 'easy' ? 1.7 : (s.diff === 'med' ? 1.4 : 1.15);
+        if (s.firmFlare) bleed *= 0.72;
         if (this.throttle <= (s.flareIdleThr ?? 0.2)) bleed *= 1.25;
-        if (this.flareAssist) bleed *= 1.15;
+        if (this.flareAssist && !s.firmFlare) bleed *= 1.15;
         this.velocity.y *= Math.pow(1 / bleed, dt * 4);
       }
     }
@@ -342,8 +351,9 @@ export class FlightModel {
       }
       if (this.onGround && !s.isHeli && spdNow > 3) {
         const wv = s.weathervane ?? 0.5;
-        this.euler.y += wx * wv * 0.014 * dt * Math.min(1, spdNow / 18);
-        if ((s.id === 'cessna182' || (s.diff === 'easy' && s.type === 'prop')) && spdNow > 12) {
+        const lightBoost = (s.mass < 2500 || s.type === 'glider' || s.snappy) ? 1.3 : 1.0;
+        this.euler.y += wx * wv * 0.014 * lightBoost * dt * Math.min(1, spdNow / 18);
+        if ((s.id === 'cessna182' || (s.diff === 'easy' && s.type === 'prop') || s.snappy) && spdNow > 12) {
           this.euler.z += Math.sign(wx || 1) * ws * 0.09 * dt * Math.min(1, (spdNow - 12) / 22);
           if (Math.abs(this.euler.z) > 0.9 && spdNow > 16) {
             this.alive = false;
@@ -400,12 +410,18 @@ export class FlightModel {
       return { event: 'crash', reason: 'water impact', vert, gs };
     }
 
-    // Water drag / step taxi
+    // Water drag / step taxi — soggy amphib rollout
     this.velocity.y = 0;
     let wfric = 0.91;
-    if (s.id === 'amphibian') wfric = 0.88;
-    if (this.brakes || this.reverse) wfric = 0.82;
-    this.euler.x *= 0.92;
+    if (s.id === 'amphibian' || s.soggyWaterRollout) {
+      wfric = 0.86 - Math.min(0.06, (s.waterRolloutDrag || 0.1) * 0.25);
+      this.euler.x *= 0.78;
+      this.euler.z *= 0.88;
+      this.quaternion.setFromEuler(this.euler);
+    } else {
+      this.euler.x *= 0.92;
+    }
+    if (this.brakes || this.reverse) wfric = Math.min(wfric, 0.80);
     this.velocity.x *= wfric;
     this.velocity.z *= wfric;
 
@@ -449,6 +465,17 @@ export class FlightModel {
           reason: vert > s.landVertMax ? 'hard landing' : 'too fast',
           vert, gs, score
         };
+      }
+      // Privatejet: spoilers + gear mandatory on touch
+      if (s.requireGearSpoilersGate || s.id === 'privatejet') {
+        const gearOkPj = !s.gearRetractable || this.gearDown;
+        const armedPj = !!(this.spoilersArmed || this.spoilers);
+        if (!gearOkPj || !armedPj) {
+          const reason = !gearOkPj ? 'gear up' : 'spoilers not armed';
+          this.alive = false;
+          if (score) { score.fail = true; score.reason = reason; score.issues = [reason, ...(score.issues || [])]; }
+          return { event: 'crash', reason, vert, gs, score };
+        }
       }
       // Airliner hard-gate: unstable OR flaps not full OR gear up OR spoilers not armed → crash
       if (s.id === 'airliner' || s.landHardGate) {
@@ -562,6 +589,16 @@ export class FlightModel {
         if (diff === 'expert' || (hard && s.enforceStableApproach)) fail = true;
       }
     }
+    // Glider: spoilers are energy/path — reward open, punish high-energy closed
+    if (s.energySpoilerPath || s.type === 'glider') {
+      if (this.spoilers) {
+        points += 10; breakdown.config += 10;
+      } else if (gs > (s.vref || 28) * 1.15 || vert > 1.2) {
+        issues.push('energy high — spoilers');
+        points -= 20; breakdown.speed -= 20;
+        if (gs > (s.landSpeedMax || 32) * 0.92) fail = true;
+      }
+    }
 
     if (s.hasMixture) {
       if (this.mixtureRich) { points += 3; breakdown.config += 3; }
@@ -587,15 +624,33 @@ export class FlightModel {
       else if (!tvOk && gs < 50) {
         issues.push('TV off + slow');
         points -= 30; breakdown.config -= 30;
-        if (diff === 'expert') fail = true;
+        if (diff === 'expert' || s.tvFailModes) fail = true;
+      }
+      // Conventional vs TV failure modes
+      if (s.tvFailModes && !this.thrustVectorOn) {
+        if (gs < 55) {
+          issues.push('conventional too slow (TV off)');
+          points -= 40; breakdown.speed -= 40;
+          if (gs < 42 || vert > 1.4) fail = true;
+        } else if (gs >= 55 && gs <= 90) {
+          points += 6; breakdown.speed += 6;
+        }
+      }
+      if (s.tvFailModes && this.thrustVectorOn && gs < 35 && vert > 1.6) {
+        issues.push('TV hover drop');
+        points -= 25; breakdown.sink -= 25;
+        if (vert > 2.2) fail = true;
       }
     }
-    if (s.punishSlowFloat || s.id === 'f15') {
+    if (s.punishSlowFloat || s.onSpeedLanding || s.id === 'f15') {
       const onSpeedMin = (s.approachSpeedMin ?? 70);
+      const onSpeedMax = (s.approachSpeedMax ?? 90);
       if (gs < onSpeedMin * 0.85) {
         issues.push('slow float (fighter)');
         points -= 35; breakdown.speed -= 35;
         if (gs < onSpeedMin * 0.7) fail = true;
+      } else if (gs >= onSpeedMin && gs <= onSpeedMax) {
+        points += 10; breakdown.speed += 10; // on-speed
       }
     }
     if ((s.id === 'f15' || s.type === 'fighter') && this.euler.x < -0.12 && gs > 40) {
@@ -730,8 +785,21 @@ export class FlightModel {
         points -= 10; breakdown.flare -= 10;
       }
     } else {
-      // heli: level skids already scored via bank; bonus for slow hover
-      if (gs < 5 && vert < landVert * 0.6) { points += 10; breakdown.flare += 10; }
+      // heli hover settle — slow vertical; run-on / hard sink still bites
+      if (s.hoverSettle) {
+        if (gs < 4 && vert < landVert * 0.55) { points += 14; breakdown.flare += 14; }
+        else if (gs < 8 && vert < landVert * 0.7) { points += 6; breakdown.flare += 6; }
+        else if (gs > 10 || vert > landVert * 0.85) {
+          issues.push('hover settle rough');
+          points -= 12; breakdown.flare -= 12;
+        }
+        if (gs > (s.landSpeedMax || 15) * 0.7 && vert > 1.0) {
+          issues.push('run-on instead of settle');
+          points -= 15; breakdown.speed -= 15;
+        }
+      } else if (gs < 5 && vert < landVert * 0.6) {
+        points += 10; breakdown.flare += 10;
+      }
     }
 
     // Unstable approach penalty (hard types: soft cap ≤75)
@@ -889,10 +957,15 @@ export class FlightModel {
     if (s.hasMixture && !this.mixtureRich && this.position.y < 1500) thrustMag *= 0.7;
     if (s.hasCondition && !this.conditionRun) thrustMag *= 0.15;
 
-    // Afterburner
-    if (s.hasAfterburner && this.afterburner && this.throttle > 0.6) {
-      const ab = s.abThrust || s.maxThrust * 1.8;
-      thrustMag = s.idleThrust + (ab - s.idleThrust) * this.throttle;
+    // Afterburner only above thr gate (default / abThrMin 60%)
+    const abMin = s.abThrMin ?? 0.6;
+    if (s.hasAfterburner && this.afterburner) {
+      if (this.throttle > abMin) {
+        const ab = s.abThrust || s.maxThrust * 1.8;
+        thrustMag = s.idleThrust + (ab - s.idleThrust) * this.throttle;
+      } else {
+        this.afterburner = false; // under gate — mil only
+      }
     }
 
     // Reverse thrust on ground
@@ -901,9 +974,11 @@ export class FlightModel {
       thrustMag = -Math.abs(thrustMag) * revFrac * Math.max(this.throttle, 0.3);
     }
 
-    // Rolling resistance — airliner needs most of the runway; 182 rolls quick
+    // Rolling resistance — longRoll cargo/airliner; shortField aerobatic pops off
     if (this.onGround && speed > 0.5 && !this.reverse) {
-      const grd = s.groundRollDrag ?? (s.mass > 40000 ? 0.045 : 0.02);
+      let grd = s.groundRollDrag ?? (s.mass > 40000 ? 0.045 : 0.02);
+      if (s.shortField) grd *= 0.75;
+      if (s.longRoll) grd *= 1.08;
       const velDir = this.velocity.lengthSq() > 0.01
         ? this._tmp.copy(this.velocity).normalize()
         : this._fwd;
@@ -1036,9 +1111,13 @@ export class FlightModel {
       lift *= 1 + etlBonus;
     }
 
-    // Vortex ring risk: high descent + low forward speed
-    if (this.velocity.y < -5 && speed < 12 && agl > 3 && this.collective > 0.5) {
-      lift *= 0.55; // VRS soft trap
+    // Vortex ring risk: high descent + low forward speed — still bites
+    if (this.velocity.y < -4.5 && speed < 14 && agl > 2.5 && this.collective > 0.45) {
+      const bite = s.vrsBite ? 0.38 : 0.55;
+      lift *= bite;
+      if (s.vrsBite && this.velocity.y < -6 && speed < 10) {
+        this.velocity.y -= 2.2 * dt;
+      }
     }
 
     this._force.addScaledVector(this._up, lift);
@@ -1056,6 +1135,33 @@ export class FlightModel {
     // Ground effect
     if (agl < 10) {
       this._force.y += (1 - agl / 10) * 2500 * this.collective * dens;
+    }
+    // Hover settle: damp drift near gate when collective matched
+    if (s.hoverSettle && agl < (s.hoverGateAgl || 2.5) * 2.2 && speed < 8) {
+      const settle = 1 - Math.min(1, agl / ((s.hoverGateAgl || 2.5) * 2.2));
+      this.velocity.x *= Math.pow(0.92, dt * 8 * settle);
+      this.velocity.z *= Math.pow(0.92, dt * 8 * settle);
+      if (this.velocity.y < -0.8 && this.collective > 0.35 && this.collective < 0.7) {
+        this.velocity.y *= Math.pow(0.75, dt * 6 * settle);
+      }
+    }
+  }
+
+  /** Go-around assist — blocked for glider / noToga */
+  _updateGoAround(dt, agl) {
+    const s = this.spec;
+    if (s.noToga || s.type === 'glider' || !(s.maxThrust > 0)) {
+      this.goAroundActive = false;
+      return;
+    }
+    if (!this.goAroundActive || this.onGround) return;
+    this._goAroundClimbTime = (this._goAroundClimbTime || 0) + dt;
+    if (this.throttle >= 0.85 && this.velocity.y < 8) {
+      this.velocity.y += 3.5 * dt;
+    }
+    if (this._goAroundClimbTime > 12 || agl > 250) {
+      this.goAroundActive = false;
+      this._goAroundClimbTime = 0;
     }
   }
 }
