@@ -46,6 +46,10 @@ export class Controls {
     this.waterMode = false;
     this.trim = 0;
     this.smokeOn = false;
+    this.parkBrake = false;
+    this.autobrakeLevel = 0;
+    this.flareAssist = false;
+    this.goAroundActive = false;
     this.motionEnabled = false;
     this.motionMsg = 'Motion not enabled';
     this.cameraMode = 0;
@@ -83,7 +87,7 @@ export class Controls {
   }
 
   _isGameKey(code) {
-    return /Arrow|KeyW|KeyA|KeyS|KeyD|KeyQ|KeyE|KeyG|KeyB|KeyV|KeyT|KeyX|KeyZ|KeyC|KeyH|KeyM|KeyO|Space|Shift|Digit|Bracket/.test(code);
+    return /Arrow|KeyW|KeyA|KeyS|KeyD|KeyQ|KeyE|KeyG|KeyB|KeyV|KeyT|KeyX|KeyZ|KeyC|KeyH|KeyM|KeyO|KeyP|KeyL|Space|Shift|Digit|Bracket/.test(code);
   }
 
   _handleKeyToggle(code) {
@@ -112,6 +116,20 @@ export class Controls {
     if (code === 'KeyO' && (has('ARM') || has('SPOILERS'))) {
       this.spoilersArmed = !this.spoilersArmed;
       this._syncArmBtn();
+    }
+    if (code === 'KeyP') {
+      this.parkBrake = !this.parkBrake;
+      if (this.parkBrake) {
+        this.brakes = true;
+        this._brakeLatched = true;
+        this._syncBtn('btn-brake', true);
+      }
+    }
+    if (code === 'KeyL') {
+      this.flareAssist = !this.flareAssist;
+    }
+    if ((code === 'Digit2' || code === 'Numpad2') && (has('ARM') || this.spec?.autobrakeCapable)) {
+      this._cycleAutobrake();
     }
     if (code === 'KeyV' && has('AB')) {
       this.afterburner = !this.afterburner;
@@ -187,19 +205,38 @@ export class Controls {
       this._syncBtn('btn-gear', this.gearDown);
       this._updateGearLabel();
     });
-    this._bindToggle(els.brake, () => {
-      this.brakes = !this.brakes;
-      this._brakeLatched = this.brakes;
-      this._syncBtn('btn-brake', this.brakes);
-    });
+    if (els.brake) {
+      this._bindStepHold(els.brake, () => {
+        if (this.parkBrake) {
+          this.parkBrake = false;
+          this.brakes = false;
+          this._brakeLatched = false;
+        } else {
+          this.brakes = !this.brakes;
+          this._brakeLatched = this.brakes;
+        }
+        this._syncBtn('btn-brake', this.brakes || this.parkBrake);
+      }, () => {
+        this.parkBrake = !this.parkBrake;
+        if (this.parkBrake) {
+          this.brakes = true;
+          this._brakeLatched = true;
+        }
+        this._syncBtn('btn-brake', this.brakes || this.parkBrake);
+      });
+    }
     this._bindToggle(els.spoilers, () => {
       this.spoilers = !this.spoilers;
       this._syncBtn('btn-spoilers', this.spoilers);
     });
-    this._bindToggle(els.arm, () => {
-      this.spoilersArmed = !this.spoilersArmed;
-      this._syncArmBtn();
-    });
+    if (els.arm) {
+      this._bindStepHold(els.arm, () => {
+        this.spoilersArmed = !this.spoilersArmed;
+        this._syncArmBtn();
+      }, () => {
+        this._cycleAutobrake();
+      });
+    }
     this._bindToggle(els.mix, () => {
       this.mixtureRich = !this.mixtureRich;
       this._syncBtn('btn-mix', this.mixtureRich);
@@ -324,27 +361,58 @@ export class Controls {
   _fireToga() {
     this.throttle = 1;
     this.reverse = false;
+    this.parkBrake = false;
+    this.brakes = false;
+    this._brakeLatched = false;
+    this.spoilers = false;
+    this.spoilersArmed = false;
     this._syncBtn('btn-rev', false);
+    this._syncBtn('btn-brake', false);
+    this._syncBtn('btn-spoilers', false);
+    this._syncArmBtn();
     if (this.els?.throttle) this.els.throttle.value = 100;
-    // Ensure TO flaps if currently landing flaps
     const s = this.spec;
-    if (s && s.flapTakeoff != null && this.flaps > (s.flapTakeoff + 0.15)) {
-      const steps = s.flapSteps || [0, 1];
-      let best = 0;
-      let bestDist = 99;
-      steps.forEach((v, i) => {
-        const d = Math.abs(v - s.flapTakeoff);
-        if (d < bestDist) { bestDist = d; best = i; }
-      });
-      this.flapIndex = best;
-      this.flaps = steps[best];
-      this._updateFlapsLabel();
+    const airborne = this._onGroundHint === false;
+    if (airborne) {
+      this.goAroundActive = true;
+      // Retract one flap step toward takeoff setting
+      if (s && this.flaps > 0.05) {
+        const steps = s.flapSteps || [0, 1];
+        const target = s.flapTakeoff != null ? s.flapTakeoff : Math.max(0, this.flaps - 0.25);
+        let best = 0;
+        let bestDist = 99;
+        steps.forEach((v, i) => {
+          const d = Math.abs(v - target);
+          if (d < bestDist) { bestDist = d; best = i; }
+        });
+        this.flapIndex = best;
+        this.flaps = steps[best];
+        this._updateFlapsLabel();
+      }
+    } else {
+      this.goAroundActive = false;
+      if (s && s.flapTakeoff != null && this.flaps > (s.flapTakeoff + 0.15)) {
+        const steps = s.flapSteps || [0, 1];
+        let best = 0;
+        let bestDist = 99;
+        steps.forEach((v, i) => {
+          const d = Math.abs(v - s.flapTakeoff);
+          if (d < bestDist) { bestDist = d; best = i; }
+        });
+        this.flapIndex = best;
+        this.flaps = steps[best];
+        this._updateFlapsLabel();
+      }
     }
     const toga = document.getElementById('btn-toga');
     if (toga) {
       toga.classList.add('on');
       setTimeout(() => toga.classList.remove('on'), 400);
     }
+  }
+
+  _cycleAutobrake() {
+    this.autobrakeLevel = (this.autobrakeLevel + 1) % 3;
   }
 
   _bindToggle(el, fn) {
@@ -516,6 +584,10 @@ export class Controls {
     this.waterMode = false;
     this.throttle = 0;
     this.smokeOn = false;
+    this.parkBrake = false;
+    this.autobrakeLevel = 0;
+    this.flareAssist = !!spec.flareAssistDefault;
+    this.goAroundActive = false;
     this.collective = spec.isHeli ? 0.45 : 0.4;
     this.trim = 0;
 
@@ -646,6 +718,10 @@ export class Controls {
     fm.trim = this.trim;
     fm.collective = this.collective;
     fm.smokeOn = this.smokeOn;
+    fm.parkBrake = this.parkBrake;
+    fm.autobrakeLevel = this.autobrakeLevel;
+    fm.flareAssist = this.flareAssist;
+    fm.goAroundActive = this.goAroundActive;
     this._onGroundHint = !!fm.onGround;
   }
 }
