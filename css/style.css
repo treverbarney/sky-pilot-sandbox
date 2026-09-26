@@ -1397,3 +1397,66 @@ button, input {
   padding: 4px 8px;
   font-size: 0.62rem;
 }
+
+
+/* Per-type hangar silhouette accents */
+.ac-card.type-cessna182 { --ac-accent: #3d7cff; }
+.ac-card.type-cessna182 .ac-card-sil {
+  background:
+    radial-gradient(ellipse 90% 70% at 50% 100%, rgba(61, 124, 255, 0.42), transparent 65%),
+    linear-gradient(180deg, rgba(255,255,255,0.04), transparent);
+}
+.ac-card.type-privatejet { --ac-accent: #8aa4c8; }
+.ac-card.type-privatejet .ac-card-sil {
+  background:
+    radial-gradient(ellipse 90% 70% at 50% 100%, rgba(138, 164, 200, 0.4), transparent 65%),
+    linear-gradient(180deg, rgba(255,255,255,0.05), transparent);
+}
+.ac-card.type-airliner { --ac-accent: #e04858; }
+.ac-card.type-airliner .ac-card-sil {
+  background:
+    radial-gradient(ellipse 90% 70% at 50% 100%, rgba(224, 72, 88, 0.4), transparent 65%),
+    linear-gradient(180deg, rgba(255,255,255,0.04), transparent);
+}
+.ac-card.type-f15 { --ac-accent: #6a8498; }
+.ac-card.type-f15 .ac-card-sil {
+  background:
+    radial-gradient(ellipse 90% 70% at 50% 100%, rgba(106, 132, 152, 0.45), transparent 65%),
+    linear-gradient(180deg, rgba(40,50,60,0.35), transparent);
+}
+.ac-card.type-area51 { --ac-accent: #44ff88; }
+.ac-card.type-area51 .ac-card-sil {
+  background:
+    radial-gradient(ellipse 90% 70% at 50% 100%, rgba(68, 255, 136, 0.45), transparent 65%),
+    linear-gradient(180deg, rgba(20,40,30,0.4), transparent);
+}
+.ac-card.type-amphibian { --ac-accent: #e88844; }
+.ac-card.type-amphibian .ac-card-sil {
+  background:
+    radial-gradient(ellipse 90% 70% at 50% 100%, rgba(232, 136, 68, 0.42), transparent 65%),
+    linear-gradient(180deg, rgba(40, 90, 120, 0.25), transparent);
+}
+.ac-card.type-aerobatic { --ac-accent: #ff3355; }
+.ac-card.type-aerobatic .ac-card-sil {
+  background:
+    radial-gradient(ellipse 90% 70% at 50% 100%, rgba(255, 51, 85, 0.45), transparent 65%),
+    linear-gradient(180deg, rgba(255,255,255,0.05), transparent);
+}
+.ac-card.type-cargo { --ac-accent: #c8a050; }
+.ac-card.type-cargo .ac-card-sil {
+  background:
+    radial-gradient(ellipse 90% 70% at 50% 100%, rgba(200, 160, 80, 0.42), transparent 65%),
+    linear-gradient(180deg, rgba(60,50,30,0.3), transparent);
+}
+.ac-card.type-glider { --ac-accent: #88b8e0; }
+.ac-card.type-glider .ac-card-sil {
+  background:
+    radial-gradient(ellipse 90% 70% at 50% 100%, rgba(136, 184, 224, 0.4), transparent 65%),
+    linear-gradient(180deg, rgba(255,255,255,0.06), transparent);
+}
+.ac-card.type-heli { --ac-accent: #44aa66; }
+.ac-card.type-heli .ac-card-sil {
+  background:
+    radial-gradient(ellipse 90% 70% at 50% 100%, rgba(68, 170, 102, 0.42), transparent 65%),
+    linear-gradient(180deg, rgba(30,50,35,0.3), transparent);
+}

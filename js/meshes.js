@@ -61,15 +61,15 @@ function propDisc(parent, radius, y, z, darkMat) {
 }
 
 function addNavAndShadow(g, tips = { x: 1.2, y: 0.4, z: 0.1 }, strobe = { x: 0, y: 0.9, z: -1.5 }, blobY = -0.9) {
-  const navGeo = new THREE.SphereGeometry(0.1, 6, 5);
+  const navGeo = new THREE.SphereGeometry(0.14, 8, 6);
   const red = new THREE.Mesh(
     navGeo,
     new THREE.MeshStandardMaterial({
-      color: 0xff2020,
-      emissive: 0xff1010,
-      emissiveIntensity: 1.5,
-      roughness: 0.4,
-      metalness: 0.1
+      color: 0xff3030,
+      emissive: 0xff1515,
+      emissiveIntensity: 2.4,
+      roughness: 0.35,
+      metalness: 0.08
     })
   );
   red.position.set(-tips.x, tips.y, tips.z);
@@ -78,11 +78,11 @@ function addNavAndShadow(g, tips = { x: 1.2, y: 0.4, z: 0.1 }, strobe = { x: 0, 
   const green = new THREE.Mesh(
     navGeo.clone(),
     new THREE.MeshStandardMaterial({
-      color: 0x20ff60,
-      emissive: 0x10cc40,
-      emissiveIntensity: 1.5,
-      roughness: 0.4,
-      metalness: 0.1
+      color: 0x30ff70,
+      emissive: 0x18ee50,
+      emissiveIntensity: 2.4,
+      roughness: 0.35,
+      metalness: 0.08
     })
   );
   green.position.set(tips.x, tips.y, tips.z);
@@ -93,8 +93,8 @@ function addNavAndShadow(g, tips = { x: 1.2, y: 0.4, z: 0.1 }, strobe = { x: 0, 
     new THREE.MeshStandardMaterial({
       color: 0xffffff,
       emissive: 0xffffff,
-      emissiveIntensity: 2.0,
-      roughness: 0.3,
+      emissiveIntensity: 3.2,
+      roughness: 0.25,
       metalness: 0.05
     })
   );
@@ -129,17 +129,19 @@ function kitCessna182(g, kit) {
   // High wing + struts
   addBox(g, 8.2, 0.14, 1.45, body, 0, 1.15, 0.2);
   addFlapHint(g, 5.5, 0.32, dark, 1.12, -0.4);
-  addBox(g, 0.09, 0.85, 0.09, dark, -1.35, 0.7, 0.15);
-  addBox(g, 0.09, 0.85, 0.09, dark, 1.35, 0.7, 0.15);
-  addBox(g, 0.07, 0.7, 0.07, dark, -2.4, 0.75, 0.05, 0, 0, 0.35);
-  addBox(g, 0.07, 0.7, 0.07, dark, 2.4, 0.75, 0.05, 0, 0, -0.35);
+  addBox(g, 0.14, 0.9, 0.14, dark, -1.35, 0.7, 0.15);
+  addBox(g, 0.14, 0.9, 0.14, dark, 1.35, 0.7, 0.15);
+  addBox(g, 0.12, 0.78, 0.12, dark, -2.5, 0.78, 0.05, 0, 0, 0.38);
+  addBox(g, 0.12, 0.78, 0.12, dark, 2.5, 0.78, 0.05, 0, 0, -0.38);
+  addBox(g, 0.1, 0.65, 0.1, dark, -3.4, 0.85, 0.05, 0, 0, 0.45);
+  addBox(g, 0.1, 0.65, 0.1, dark, 3.4, 0.85, 0.05, 0, 0, -0.45);
   // Tail
   addBox(g, 2.6, 0.1, 0.55, body, 0, 0.55, -1.95);
   addBox(g, 0.12, 1.35, 0.75, accent, 0, 1.15, -2.0);
   addBox(g, 0.7, 0.5, 1.15, glass, 0, 0.85, 0.85);
-  // Cabin side windows
-  addBox(g, 0.04, 0.28, 0.55, glass, 0.48, 0.7, 0.35);
-  addBox(g, 0.04, 0.28, 0.55, glass, -0.48, 0.7, 0.35);
+  // Cabin side windows — thicker readable strip
+  addBox(g, 0.06, 0.32, 1.35, glass, 0.5, 0.72, 0.15);
+  addBox(g, 0.06, 0.32, 1.35, glass, -0.5, 0.72, 0.15);
   propDisc(g, 0.95, 0.38, 2.95, dark);
   // Spinner
   const spin = new THREE.Mesh(new THREE.ConeGeometry(0.14, 0.28, 8), metal);
@@ -169,8 +171,9 @@ function kitPrivateJet(g, kit) {
   addBox(g, 3.4, 0.1, 0.75, body, 0, 2.25, -2.55);
   // Aft engines
   for (const x of [-0.72, 0.72]) {
-    addCyl(g, 0.26, 0.3, 1.55, 10, metal, x, 0.72, -2.15, Math.PI / 2, 0, 0);
-    addCyl(g, 0.22, 0.22, 0.12, 10, dark, x, 0.72, -2.95, Math.PI / 2, 0, 0);
+    addCyl(g, 0.28, 0.34, 1.65, 10, metal, x, 0.72, -2.15, Math.PI / 2, 0, 0);
+    addCyl(g, 0.24, 0.24, 0.14, 10, dark, x, 0.72, -3.0, Math.PI / 2, 0, 0);
+    addCyl(g, 0.3, 0.32, 0.12, 10, dark, x, 0.72, -1.35, Math.PI / 2, 0, 0);
   }
   addBox(g, 0.72, 0.42, 1.15, glass, 0, 0.78, 1.55);
   const wmat = makeToonPbr({
@@ -210,19 +213,19 @@ function kitAirliner(g, kit) {
   addBox(g, 6.0, 0.14, 1.3, body, 0, 1.15, -5.1);
   // Underwing pods
   for (const x of [-3.6, 3.6]) {
-    addCyl(g, 0.48, 0.55, 2.5, 10, metal, x, -0.55, 0.15, Math.PI / 2, 0, 0);
-    addCyl(g, 0.38, 0.38, 0.18, 10, dark, x, -0.55, 1.4, Math.PI / 2, 0, 0);
-    addCyl(g, 0.42, 0.42, 0.15, 10, dark, x, -0.55, -1.1, Math.PI / 2, 0, 0);
+    addCyl(g, 0.5, 0.58, 2.6, 10, metal, x, -0.55, 0.15, Math.PI / 2, 0, 0);
+    addCyl(g, 0.4, 0.4, 0.22, 10, dark, x, -0.55, 1.45, Math.PI / 2, 0, 0);
+    addCyl(g, 0.52, 0.55, 0.18, 10, dark, x, -0.55, -1.2, Math.PI / 2, 0, 0);
   }
   const winStripe = makeToonPbr({
     color: 0x1a3348,
     emissive: 0x88aacc,
-    emissiveIntensity: 0.4,
+    emissiveIntensity: 0.55,
     roughness: 0.3,
     metalness: 0.1
   });
-  addBox(g, 0.06, 0.2, len * 0.72, winStripe, 0.9, 0.7, 0.2);
-  addBox(g, 0.06, 0.2, len * 0.72, winStripe, -0.9, 0.7, 0.2);
+  addBox(g, 0.08, 0.28, len * 0.75, winStripe, 0.92, 0.72, 0.2);
+  addBox(g, 0.08, 0.28, len * 0.75, winStripe, -0.92, 0.72, 0.2);
   gearSet(
     g,
     [
@@ -258,11 +261,13 @@ function kitF15(g, kit) {
   addBox(g, 0.1, 1.65, 1.05, accent, -0.62, 1.05, -2.35);
   addBox(g, 0.1, 1.65, 1.05, accent, 0.62, 1.05, -2.35);
   addBox(g, 3.4, 0.1, 0.75, body, 0, 0.18, -2.45);
-  // Side intakes
-  addBox(g, 0.55, 0.55, 2.2, dark, -0.65, -0.05, -1.4);
-  addBox(g, 0.55, 0.55, 2.2, dark, 0.65, -0.05, -1.4);
-  addCyl(g, 0.3, 0.36, 1.4, 8, dark, -0.55, -0.12, -2.7, Math.PI / 2, 0, 0);
-  addCyl(g, 0.3, 0.36, 1.4, 8, dark, 0.55, -0.12, -2.7, Math.PI / 2, 0, 0);
+  // Side intakes — chunky lips
+  addBox(g, 0.7, 0.65, 2.35, dark, -0.7, -0.05, -1.35);
+  addBox(g, 0.7, 0.65, 2.35, dark, 0.7, -0.05, -1.35);
+  addBox(g, 0.12, 0.7, 0.55, accent, -1.05, -0.05, -0.35);
+  addBox(g, 0.12, 0.7, 0.55, accent, 1.05, -0.05, -0.35);
+  addCyl(g, 0.32, 0.4, 1.5, 8, dark, -0.55, -0.12, -2.75, Math.PI / 2, 0, 0);
+  addCyl(g, 0.32, 0.4, 1.5, 8, dark, 0.55, -0.12, -2.75, Math.PI / 2, 0, 0);
   // Bubble canopy
   const canopy = new THREE.Mesh(
     new THREE.SphereGeometry(0.55, 12, 10),
@@ -316,10 +321,11 @@ function kitArea51(g, kit) {
   addBox(g, 2.2, 0.08, 1.2, body, -1.6, 0.12, 0.5, 0, 0.45, 0.15);
   addBox(g, 2.2, 0.08, 1.2, body, 1.6, 0.12, 0.5, 0, -0.45, -0.15);
   const line = emissive || accent;
-  addBox(g, 4.0, 0.05, 0.07, line, 0, 0.22, 0.35);
-  addBox(g, 4.0, 0.05, 0.07, line, 0, 0.22, -0.45);
-  addBox(g, 0.07, 0.05, 2.4, line, 0.9, 0.22, -0.05);
-  addBox(g, 0.07, 0.05, 2.4, line, -0.9, 0.22, -0.05);
+  addBox(g, 4.2, 0.07, 0.1, line, 0, 0.24, 0.35);
+  addBox(g, 4.2, 0.07, 0.1, line, 0, 0.24, -0.45);
+  addBox(g, 0.1, 0.07, 2.6, line, 0.95, 0.24, -0.05);
+  addBox(g, 0.1, 0.07, 2.6, line, -0.95, 0.24, -0.05);
+  addBox(g, 3.2, 0.06, 0.08, line, 0, 0.28, -1.0);
   const canopy = new THREE.Mesh(
     new THREE.SphereGeometry(0.5, 10, 8),
     makeToonPbr({
@@ -374,8 +380,10 @@ function kitAmphibian(g, kit) {
   // High wing
   addBox(g, 10.2, 0.14, 1.55, body, 0, 1.35, 0.2);
   addFlapHint(g, 7.2, 0.34, dark, 1.32, -0.45);
-  addBox(g, 0.1, 0.95, 0.1, dark, -1.5, 0.9, 0.15);
-  addBox(g, 0.1, 0.95, 0.1, dark, 1.5, 0.9, 0.15);
+  addBox(g, 0.16, 1.05, 0.16, dark, -1.5, 0.9, 0.15);
+  addBox(g, 0.16, 1.05, 0.16, dark, 1.5, 0.9, 0.15);
+  addBox(g, 0.12, 0.9, 0.12, dark, -2.8, 0.95, 0.1, 0, 0, 0.3);
+  addBox(g, 0.12, 0.9, 0.12, dark, 2.8, 0.95, 0.1, 0, 0, -0.3);
   addBox(g, 3.2, 0.1, 0.6, body, 0, 0.75, -2.2);
   addBox(g, 0.12, 1.4, 0.8, accent, 0, 1.35, -2.25);
   propDisc(g, 1.0, 0.55, len / 2 + 0.95, dark);
@@ -412,7 +420,9 @@ function kitAerobatic(g, kit) {
   addBox(g, 2.2, 0.09, 0.5, body, 0, 0.4, -1.45);
   addBox(g, 0.12, 1.35, 0.85, accent, 0, 0.95, -1.5);
   propDisc(g, 1.05, 0.3, len / 2 + 0.55, dark);
-  addBox(g, 0.58, 0.42, 0.95, glass, 0, 0.62, 0.45);
+  addBox(g, 0.62, 0.45, 1.0, glass, 0, 0.62, 0.45);
+  addBox(g, 0.08, 0.35, 0.9, dark, -0.45, 0.35, 0.2);
+  addBox(g, 0.08, 0.35, 0.9, dark, 0.45, 0.35, 0.2);
   // Wheel pants
   for (const x of [-0.75, 0.75]) {
     addBox(g, 0.22, 0.4, 0.75, dark, x, -0.1, 0.25);
@@ -443,7 +453,8 @@ function kitCargo(g, kit) {
   addBox(g, 0.16, 2.3, 1.4, accent, 0, 2.55, -3.7);
   // Four props
   for (const x of [-5.0, -2.5, 2.5, 5.0]) {
-    addCyl(g, 0.3, 0.34, 1.5, 8, dark, x, 1.55, 0.9, Math.PI / 2, 0, 0);
+    addCyl(g, 0.34, 0.4, 1.65, 8, dark, x, 1.55, 0.9, Math.PI / 2, 0, 0);
+    addCyl(g, 0.38, 0.36, 0.2, 8, metal, x, 1.55, 1.7, Math.PI / 2, 0, 0);
     const prop = new THREE.Group();
     prop.name = 'prop';
     addBox(prop, 0.1, 1.7, 0.06, dark);
@@ -481,7 +492,8 @@ function kitGlider(g, kit) {
   addBox(g, 0.06, 0.4, 0.3, accent, 8.15, 0.5, 0.2);
   addBox(g, 2.6, 0.06, 0.4, body, 0, 0.4, -2.55);
   addBox(g, 0.07, 1.2, 0.65, accent, 0, 0.85, -2.6);
-  addBox(g, 0.38, 0.32, 1.0, glass, 0, 0.42, 1.1);
+  addBox(g, 0.42, 0.36, 1.15, glass, 0, 0.44, 1.15);
+  addBox(g, 0.5, 0.08, 0.9, accent, 0, 0.28, 0.2);
   // Single retractable wheel
   gearSet(g, [[0, -0.28, 0.35, 0.38]], gearMetal, gearTire);
   // Wingtip wheels (fixed tiny)
@@ -517,8 +529,9 @@ function kitHeli(g, kit) {
   // Main rotor — two blade + disc
   const rotor = new THREE.Group();
   rotor.name = 'rotor';
-  addCyl(rotor, 0.14, 0.14, 0.4, 8, accent, 0, 1.55, 0);
-  const b1 = addBox(rotor, 0.24, 0.05, 6.2, dark, 0, 1.68, 0);
+  addCyl(rotor, 0.22, 0.22, 0.55, 10, accent, 0, 1.5, 0);
+  addCyl(rotor, 0.35, 0.28, 0.22, 10, metal || accent, 0, 1.72, 0);
+  const b1 = addBox(rotor, 0.28, 0.06, 6.2, dark, 0, 1.78, 0);
   const b2 = b1.clone();
   b2.rotation.y = Math.PI / 2;
   rotor.add(b2);

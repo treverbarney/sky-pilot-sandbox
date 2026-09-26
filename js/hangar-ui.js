@@ -18,7 +18,7 @@ export function buildHangarGrid(gridEl, { onSelect, onInfo }) {
     const sil = SILHOUETTE_SVG[info.silhouette] || SILHOUETTE_SVG.highwing;
     const diff = a.diff || 'med';
     const card = document.createElement('article');
-    card.className = `ac-card diff-${diff}${info.fictional ? ' fictional' : ''}`;
+    card.className = `ac-card diff-${diff} type-${a.id}${info.fictional ? ' fictional' : ''}`;
     card.style.setProperty('--ac-accent', accent);
     card.dataset.id = a.id;
     card.dataset.diff = diff;

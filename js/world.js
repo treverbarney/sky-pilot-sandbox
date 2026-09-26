@@ -56,7 +56,8 @@ export function createWorld(scene, opts = {}) {
 
   // Sky + fog — stylized depth
   scene.background = new THREE.Color(0x5aadef);
-  scene.fog = new THREE.FogExp2(0x9ecfff, 0.00022);
+  // Slight dusk-lean fog tint (readable night approach without full TOD)
+  scene.fog = new THREE.FogExp2(0xa8c4e8, 0.00024);
   if (getEnvMap()) scene.environment = getEnvMap();
 
   // Lighting — warm key, cool fill
@@ -227,8 +228,8 @@ export function createWorld(scene, opts = {}) {
     edge.position.set(x, 0.52, 0);
     root.add(edge);
   }
-  for (let z = -WORLD.runway.halfL + 40; z < WORLD.runway.halfL; z += 70) {
-    const dash = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 30), markMat);
+  for (let z = -WORLD.runway.halfL + 40; z < WORLD.runway.halfL; z += 58) {
+    const dash = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 36), markMat);
     dash.rotation.x = -Math.PI / 2;
     dash.position.set(0, 0.52, z);
     root.add(dash);
@@ -242,8 +243,8 @@ export function createWorld(scene, opts = {}) {
       bar.position.set(x, 0.53, z0);
       root.add(bar);
     }
-    for (const x of [-8, 8]) {
-      const ap = new THREE.Mesh(new THREE.PlaneGeometry(3.8, 20), markMat);
+    for (const x of [-9, 9]) {
+      const ap = new THREE.Mesh(new THREE.PlaneGeometry(5.2, 28), markMat);
       ap.rotation.x = -Math.PI / 2;
       ap.position.set(x, 0.53, zSign * (WORLD.runway.halfL - 220));
       root.add(ap);
@@ -287,7 +288,7 @@ export function createWorld(scene, opts = {}) {
   // Aiming-point diamonds (stronger)
   for (const zSign of [-1, 1]) {
     for (const x of [-10, 10]) {
-      const aim = new THREE.Mesh(new THREE.PlaneGeometry(5.5, 18), markMat);
+      const aim = new THREE.Mesh(new THREE.PlaneGeometry(7.5, 26), markMat);
       aim.rotation.x = -Math.PI / 2;
       aim.position.set(x, 0.54, zSign * (WORLD.runway.halfL - 280));
       root.add(aim);
@@ -298,12 +299,13 @@ export function createWorld(scene, opts = {}) {
   const lightCount = q.clouds || qualityKey === 'high' ? 64 : 48;
   const lightGeo = new THREE.SphereGeometry(0.45, 6, 4);
   const lightMat = new THREE.MeshStandardMaterial({
-    color: 0xffd080,
+    color: 0xffe0a0,
     emissive: 0xffc060,
-    emissiveIntensity: 0.85,
-    roughness: 0.4,
-    metalness: 0.1
+    emissiveIntensity: 1.65,
+    roughness: 0.35,
+    metalness: 0.08
   });
+  lightMat.userData.pulse = true;
   const lights = new THREE.InstancedMesh(lightGeo, lightMat, lightCount);
   const dummy = new THREE.Object3D();
   let li = 0;
@@ -534,21 +536,37 @@ export function createWorld(scene, opts = {}) {
 
   // PAPI — 4-box glide path lights (white / red readable)
   const papiGroup = new THREE.Group();
+  papiGroup.name = 'papi';
   const papiColors = [0xff2222, 0xff2222, 0xffffff, 0xffffff];
   for (let i = 0; i < 4; i++) {
     const col = papiColors[i];
     const box = new THREE.Mesh(
-      new THREE.BoxGeometry(1.4, 0.7, 1.4),
+      new THREE.BoxGeometry(1.8, 0.9, 1.8),
       new THREE.MeshStandardMaterial({
         color: col,
         emissive: col,
         emissiveIntensity: 2.2,
-        roughness: 0.35,
-        metalness: 0.1
+        roughness: 0.3,
+        metalness: 0.08
       })
     );
-    box.position.set(WORLD.runway.halfW + 14 + i * 3.2, 0.9, -WORLD.runway.halfL + 180);
+    box.position.set(WORLD.runway.halfW + 14 + i * 3.4, 1.05, -WORLD.runway.halfL + 180);
+    box.userData.papiPulse = true;
     papiGroup.add(box);
+    // Soft glow halo
+    const halo = new THREE.Mesh(
+      new THREE.CircleGeometry(1.4, 10),
+      new THREE.MeshBasicMaterial({
+        color: col,
+        transparent: true,
+        opacity: 0.35,
+        depthWrite: false,
+        side: THREE.DoubleSide
+      })
+    );
+    halo.rotation.x = -Math.PI / 2;
+    halo.position.set(box.position.x, 0.56, box.position.z);
+    papiGroup.add(halo);
   }
   root.add(papiGroup);
 
@@ -617,11 +635,11 @@ export function createWorld(scene, opts = {}) {
     const taxiN = qualityKey === 'low' ? 16 : 28;
     const tGeo = new THREE.SphereGeometry(0.35, 5, 4);
     const tMat = new THREE.MeshStandardMaterial({
-      color: 0x4488ff,
-      emissive: 0x2266ee,
-      emissiveIntensity: 0.9,
-      roughness: 0.4,
-      metalness: 0.1
+      color: 0x5599ff,
+      emissive: 0x3388ff,
+      emissiveIntensity: 1.55,
+      roughness: 0.35,
+      metalness: 0.08
     });
     const tLights = new THREE.InstancedMesh(tGeo, tMat, taxiN);
     const td = new THREE.Object3D();
@@ -811,12 +829,19 @@ export function createWorld(scene, opts = {}) {
     },
     /** Slow cloud drift — call from main loop */
     update(dt) {
+      const t = performance.now() * 0.001;
       root.traverse((o) => {
         if (o.name === 'cloud' && o.userData.drift) {
           o.position.x += o.userData.drift * dt;
           if (o.position.x > 1600) o.position.x = -1600;
         }
+        if (o.userData.papiPulse && o.material && o.material.emissiveIntensity != null) {
+          o.material.emissiveIntensity = 1.8 + Math.sin(t * 3.2) * 0.55;
+        }
       });
+      if (lightMat) {
+        lightMat.emissiveIntensity = 1.35 + Math.sin(t * 2.4) * 0.45;
+      }
     }
   };
 }

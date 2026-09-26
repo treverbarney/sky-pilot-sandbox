@@ -95,16 +95,16 @@ export class Effects {
 
   /** Landing dust cloud on runway / dirt */
   landingDust(pos, intensity = 1) {
-    const count = Math.min(22, 10 + Math.floor(intensity * 12));
+    const count = Math.min(28, 12 + Math.floor(intensity * 14));
     for (let i = 0; i < count; i++) {
       const p = new THREE.Mesh(
         this._geoM,
         makeToonPbr({
-          color: 0xd4b878,
-          emissive: 0x8a7040,
-          emissiveIntensity: 0.12,
+          color: i % 3 === 0 ? 0xe8d0a0 : 0xc4a060,
+          emissive: 0x9a7850,
+          emissiveIntensity: 0.18,
           transparent: true,
-          opacity: 0.62,
+          opacity: 0.72,
           roughness: 1,
           metalness: 0
         })
@@ -112,14 +112,14 @@ export class Effects {
       p.position.copy(pos);
       p.position.y = Math.max(0.2, pos.y);
       p.userData.vel = new THREE.Vector3(
-        (Math.random() - 0.5) * 14 * intensity,
-        1.5 + Math.random() * 5,
-        (Math.random() - 0.5) * 14 * intensity
+        (Math.random() - 0.5) * 16 * intensity,
+        2 + Math.random() * 6,
+        (Math.random() - 0.5) * 16 * intensity
       );
-      p.userData.life = 0.8 + Math.random() * 0.9;
+      p.userData.life = 0.95 + Math.random() * 1.0;
       p.userData.fade = true;
-      p.userData.grow = 0.7;
-      p.scale.setScalar(0.5 + Math.random());
+      p.userData.grow = 0.95;
+      p.scale.setScalar(0.65 + Math.random() * 1.2);
       this.scene.add(p);
       this.particles.push(p);
     }
@@ -127,41 +127,42 @@ export class Effects {
 
   /** Splash burst for water touchdown — white-cyan */
   splash(pos, intensity = 1) {
-    const count = Math.min(28, 10 + Math.floor(intensity * 14));
+    const count = Math.min(34, 14 + Math.floor(intensity * 16));
     for (let i = 0; i < count; i++) {
       const p = new THREE.Mesh(
         this._geoS,
         makeToonPbr({
-          color: 0xb8e0ff,
+          color: i % 2 ? 0xd8f4ff : 0x9ad0f0,
           emissive: 0x88ccee,
-          emissiveIntensity: 0.25,
+          emissiveIntensity: 0.4,
           transparent: true,
-          opacity: 0.7,
-          roughness: 0.3,
-          metalness: 0.15
+          opacity: 0.78,
+          roughness: 0.25,
+          metalness: 0.12
         })
       );
       p.position.copy(pos);
       p.position.y = Math.max(0.3, pos.y);
       const ang = Math.random() * Math.PI * 2;
-      const sp = 5 + Math.random() * 16 * intensity;
+      const sp = 6 + Math.random() * 18 * intensity;
       p.userData.vel = new THREE.Vector3(
         Math.cos(ang) * sp,
-        5 + Math.random() * 12 * intensity,
+        6 + Math.random() * 14 * intensity,
         Math.sin(ang) * sp
       );
-      p.userData.life = 0.65 + Math.random() * 0.8;
+      p.userData.life = 0.75 + Math.random() * 0.9;
       p.userData.fade = true;
+      p.userData.grow = 0.5;
       this.scene.add(p);
       this.particles.push(p);
     }
     // Wide foam disc flash
     const foam = new THREE.Mesh(
-      new THREE.CircleGeometry(2.5 + intensity * 2, 12),
+      new THREE.CircleGeometry(3.2 + intensity * 2.4, 14),
       new THREE.MeshBasicMaterial({
-        color: 0xd8f4ff,
+        color: 0xe8f8ff,
         transparent: true,
-        opacity: 0.55,
+        opacity: 0.65,
         side: THREE.DoubleSide,
         depthWrite: false
       })
@@ -169,9 +170,9 @@ export class Effects {
     foam.rotation.x = -Math.PI / 2;
     foam.position.set(pos.x, Math.max(0.4, pos.y) + 0.05, pos.z);
     foam.userData.vel = new THREE.Vector3(0, 0, 0);
-    foam.userData.life = 0.45;
+    foam.userData.life = 0.55;
     foam.userData.isFlash = true;
-    foam.userData.grow = 3;
+    foam.userData.grow = 3.6;
     this.scene.add(foam);
     this.particles.push(foam);
   }
