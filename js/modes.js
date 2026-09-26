@@ -113,36 +113,57 @@ export class ModeManager {
     // Steer with aileron/elevator
     const steer = controls.aileron;
     const pitch = controls.elevator;
-    this.heading += steer * 1.5 * dt;
+    this.heading += steer * 1.8 * dt;
     const fwd = new THREE.Vector3(Math.sin(this.heading), 0, Math.cos(this.heading));
+    const ground = world.getHeight(this.pos.x, this.pos.z);
+    const agl = this.pos.y - ground;
 
-    let sink = this.dive ? 28 : 12;
-    let horiz = this.dive ? 18 : 10;
-    if (this.swoop && this.pos.y < 80) {
-      // Toggle swoop — convert altitude to forward speed, skim
-      sink = Math.max(1, sink - 14);
-      horiz = 35 + Math.min(40, (80 - this.pos.y) * 0.5);
+    // Dive: fast sink; swoop: bleed height into forward skim near ground
+    let sink = this.dive ? 36 : 11;
+    let horiz = this.dive ? 22 : 11;
+    if (this.swoop) {
+      if (agl < 90) {
+        sink = Math.max(0.5, sink - 18);
+        horiz = 40 + Math.min(55, (90 - agl) * 0.7);
+      }
+      // Ground skim band ~1.5–4 m AGL — long enjoyable float
+      if (agl < 12 && agl > 1.5) {
+        sink = Math.min(sink, 2.5);
+        horiz = Math.max(horiz, 48);
+        this.vel.y = Math.max(this.vel.y, -2.0);
+      }
     }
-    this.vel.x = fwd.x * horiz + pitch * fwd.x * -5;
-    this.vel.z = fwd.z * horiz + pitch * fwd.z * -5;
-    this.vel.y = -sink + (this.swoop && this.pos.y < 40 ? 8 : 0);
+    if (this.dive && this.swoop) {
+      // Dive+swoop: steep then flare skim
+      if (agl > 40) { sink = 40; horiz = 28; }
+      else { sink = 3; horiz = 60; }
+    }
+
+    this.vel.x = fwd.x * horiz + pitch * fwd.x * -6;
+    this.vel.z = fwd.z * horiz + pitch * fwd.z * -6;
+    let targetVy = -sink + (this.swoop && agl < 50 ? 10 : 0);
+    this.vel.y += (targetVy - this.vel.y) * Math.min(1, 4 * dt);
 
     this.pos.addScaledVector(this.vel, dt);
-    const ground = world.getHeight(this.pos.x, this.pos.z);
+    const g2 = world.getHeight(this.pos.x, this.pos.z);
     this.mesh.position.copy(this.pos);
     this.mesh.rotation.y = this.heading;
-    this.mesh.rotation.z = -steer * 0.3;
+    this.mesh.rotation.z = -steer * 0.35;
+    this.mesh.rotation.x = this.dive ? 0.35 : (this.swoop ? -0.15 : 0);
 
-    if (this.pos.y <= ground + 1.5) {
-      this.pos.y = ground + 1.5;
+    // Skim: delay touch while swooping above ~1.4 m
+    const touchAgl = (this.swoop && this.vel.y > -4) ? 1.35 : 1.5;
+    if (this.pos.y <= g2 + touchAgl) {
+      this.pos.y = g2 + 1.5;
       return { event: 'chute_land', pos: this.pos.clone() };
     }
     return null;
   }
 
   _updateVehicle(dt, controls, world) {
-    const maxSpd = this.mode === 'bike' ? 95 : 110; // m/s > 200 mph (200 mph ≈ 89 m/s)
-    const accel = this.mode === 'bike' ? 35 : 40;
+    // 200 mph ≈ 89.4 m/s — both exceed that
+    const maxSpd = this.mode === 'bike' ? 100 : 115;
+    const accel = this.mode === 'bike' ? 38 : 42;
     const thr = controls.throttle;
     const steer = controls.aileron + controls.rudder * 0.5;
 
@@ -284,7 +305,7 @@ export class ModeManager {
         const impact = -this.vel.y;
         const horiz = Math.hypot(this.vel.x, this.vel.z);
         const nearPad = Math.hypot(this.pos.x - WORLD.rocketPad.x, this.pos.z - WORLD.rocketPad.z) < 80;
-        if (impact < 12 && horiz < 25 && nearPad) {
+        if (impact < 10 && horiz < 18 && nearPad) {
           this.rocketPhase = 'land';
           this.pos.y = ground + 5;
           this.vel.set(0, 0, 0);

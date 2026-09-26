@@ -128,6 +128,12 @@ export class Checklist {
     if (this.phase === 'takeoff' && snap?.rotateReady) {
       phaseLabel = 'ROTATE';
     }
+    if (snap?.goAroundActive) {
+      phaseLabel = 'GO-AROUND';
+    }
+    if (snap?.parkBrake && !snap?.airborne) {
+      phaseLabel = 'HOLD';
+    }
     if (this.phaseEl) this.phaseEl.textContent = phaseLabel;
     if (this.titleEl) {
       this.titleEl.textContent = this.spec.name + (this.spec.fictional ? ' (FIC)' : '');
@@ -140,7 +146,8 @@ export class Checklist {
         this.vbandEl.textContent = `Vr ${msKt(s.vr)} kt · V2 ${msKt(s.v2)} kt · ${cfg}`;
       } else if (this.phase === 'landing') {
         const sink = s.landVertMax;
-        const st = snap?.stableApproach === false ? 'UNSTABLE' : snap?.stableApproach ? 'STABLE' : 'GATE…';
+        let st = snap?.stableApproach === false ? 'UNSTABLE' : snap?.stableApproach ? 'STABLE' : 'GATE…';
+        if (snap?.goAroundActive) st = 'GO-AROUND';
         this.vbandEl.textContent = `VRef ${msKt(s.vref)} kt · sink≤${sink} m/s · ${st}`;
       } else {
         this.vbandEl.textContent = `Cruise ~${msKt(s.cruiseSpeed)} kt · Vne ${msKt(s.maxSpeed)} kt`;
