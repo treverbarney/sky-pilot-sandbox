@@ -258,6 +258,42 @@ export function createWorld(scene, opts = {}) {
     }
   }
 
+  // Bold runway designators (36 / 18) — chunky readable digits
+  function addRwyDigit(parent, digit, ox, oz, rotY, mat) {
+    const segs = {
+      0: [[0, 1.1, 1.6, 0.35], [0, -1.1, 1.6, 0.35], [-0.9, 0, 0.35, 2.2], [0.9, 0, 0.35, 2.2]],
+      1: [[0.35, 0, 0.4, 2.5]],
+      3: [[0, 1.1, 1.6, 0.35], [0, 0, 1.4, 0.3], [0, -1.1, 1.6, 0.35], [0.85, 0.55, 0.35, 1.1], [0.85, -0.55, 0.35, 1.1]],
+      6: [[0, 1.1, 1.6, 0.35], [0, 0, 1.4, 0.3], [0, -1.1, 1.6, 0.35], [-0.85, 0.55, 0.35, 1.1], [-0.85, -0.55, 0.35, 1.1], [0.85, -0.55, 0.35, 1.1]],
+      8: [[0, 1.1, 1.6, 0.35], [0, 0, 1.4, 0.3], [0, -1.1, 1.6, 0.35], [-0.85, 0.55, 0.35, 1.1], [0.85, 0.55, 0.35, 1.1], [-0.85, -0.55, 0.35, 1.1], [0.85, -0.55, 0.35, 1.1]]
+    };
+    const g = new THREE.Group();
+    for (const [lx, lz, w, d] of segs[digit] || segs[8]) {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat);
+      m.rotation.x = -Math.PI / 2;
+      m.position.set(lx, 0, lz);
+      g.add(m);
+    }
+    g.position.set(ox, 0.54, oz);
+    g.rotation.y = rotY;
+    parent.add(g);
+  }
+  const numMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  // Approach from +Z sees "36"; from -Z sees "18"
+  addRwyDigit(root, 3, -2.2, WORLD.runway.halfL - 95, 0, numMat);
+  addRwyDigit(root, 6, 2.2, WORLD.runway.halfL - 95, 0, numMat);
+  addRwyDigit(root, 1, -2.2, -WORLD.runway.halfL + 95, Math.PI, numMat);
+  addRwyDigit(root, 8, 2.2, -WORLD.runway.halfL + 95, Math.PI, numMat);
+  // Aiming-point diamonds (stronger)
+  for (const zSign of [-1, 1]) {
+    for (const x of [-10, 10]) {
+      const aim = new THREE.Mesh(new THREE.PlaneGeometry(5.5, 18), markMat);
+      aim.rotation.x = -Math.PI / 2;
+      aim.position.set(x, 0.54, zSign * (WORLD.runway.halfL - 280));
+      root.add(aim);
+    }
+  }
+
   // Runway edge lights — InstancedMesh
   const lightCount = q.clouds || qualityKey === 'high' ? 64 : 48;
   const lightGeo = new THREE.SphereGeometry(0.45, 6, 4);
