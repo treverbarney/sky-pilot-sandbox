@@ -317,6 +317,66 @@ export function createAircraftMesh(spec) {
     }
   }
 
+
+  // Nav lights (red left / green right / white strobe) + soft blob shadow
+  {
+    const navGeo = new THREE.SphereGeometry(0.09, 6, 5);
+    const red = new THREE.Mesh(
+      navGeo,
+      new THREE.MeshStandardMaterial({
+        color: 0xff2020,
+        emissive: 0xff1010,
+        emissiveIntensity: 1.4,
+        roughness: 0.4,
+        metalness: 0.1
+      })
+    );
+    red.position.set(-1.15, 0.35, 0.15);
+    red.name = 'navRed';
+    g.add(red);
+    const green = new THREE.Mesh(
+      navGeo.clone(),
+      new THREE.MeshStandardMaterial({
+        color: 0x20ff60,
+        emissive: 0x10cc40,
+        emissiveIntensity: 1.4,
+        roughness: 0.4,
+        metalness: 0.1
+      })
+    );
+    green.position.set(1.15, 0.35, 0.15);
+    green.name = 'navGreen';
+    g.add(green);
+    const strobe = new THREE.Mesh(
+      navGeo.clone(),
+      new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        emissive: 0xffffff,
+        emissiveIntensity: 1.8,
+        roughness: 0.3,
+        metalness: 0.05
+      })
+    );
+    strobe.position.set(0, 0.85, -1.4);
+    strobe.name = 'navStrobe';
+    strobe.userData.blink = true;
+    g.add(strobe);
+    // Soft ground blob (follows craft; stays under)
+    const blob = new THREE.Mesh(
+      new THREE.CircleGeometry(1.6, 16),
+      new THREE.MeshBasicMaterial({
+        color: 0x000000,
+        transparent: true,
+        opacity: 0.32,
+        depthWrite: false
+      })
+    );
+    blob.rotation.x = -Math.PI / 2;
+    blob.position.y = -0.85;
+    blob.name = 'blobShadow';
+    g.add(blob);
+  }
+
   g.scale.setScalar(scale);
   g.traverse((o) => {
     if (o.isMesh) {

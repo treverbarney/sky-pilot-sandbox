@@ -95,11 +95,19 @@ export class Effects {
 
   /** Landing dust cloud on runway / dirt */
   landingDust(pos, intensity = 1) {
-    const count = Math.min(20, 8 + Math.floor(intensity * 12));
+    const count = Math.min(22, 10 + Math.floor(intensity * 12));
     for (let i = 0; i < count; i++) {
       const p = new THREE.Mesh(
         this._geoM,
-        makeFarLambert(0xc2b280, null, { transparent: true, opacity: 0.55 })
+        makeToonPbr({
+          color: 0xd4b878,
+          emissive: 0x8a7040,
+          emissiveIntensity: 0.12,
+          transparent: true,
+          opacity: 0.62,
+          roughness: 1,
+          metalness: 0
+        })
       );
       p.position.copy(pos);
       p.position.y = Math.max(0.2, pos.y);
