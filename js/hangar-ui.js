@@ -6,7 +6,7 @@ import { AIRCRAFT } from './aircraft-data.js';
 import {
   AIRCRAFT_INFO, DIFF_LABEL, DIFF_HINT, SILHOUETTE_SVG, getAircraftInfo
 } from './aircraft-info.js';
-import { bestFor, MEDAL } from './career.js';
+import { bestFor, MEDAL, isUnlocked, UNLOCK_NEED, bronzeCount } from './career.js';
 
 const HELP_SEEN_KEY = 'sky-pilot-help-seen-v1';
 
@@ -18,8 +18,9 @@ export function buildHangarGrid(gridEl, { onSelect, onInfo }) {
     const accent = info.accent || '#3db8ff';
     const sil = SILHOUETTE_SVG[info.silhouette] || SILHOUETTE_SVG.highwing;
     const diff = a.diff || 'med';
+    const locked = !isUnlocked(a.id);
     const card = document.createElement('article');
-    card.className = `ac-card diff-${diff} type-${a.id}${info.fictional ? ' fictional' : ''}`;
+    card.className = `ac-card diff-${diff} type-${a.id}${info.fictional ? ' fictional' : ''}${locked ? ' locked' : ''}`;
     card.style.setProperty('--ac-accent', accent);
     card.dataset.id = a.id;
     card.dataset.diff = diff;
@@ -43,11 +44,12 @@ export function buildHangarGrid(gridEl, { onSelect, onInfo }) {
         })()}
         <div class="ac-card-actions">
           <button type="button" class="btn-card-info" data-info="${a.id}">Info</button>
-          <button type="button" class="btn-card-fly" data-fly="${a.id}">Fly</button>
+          <button type="button" class="btn-card-fly" data-fly="${a.id}" ${locked ? 'disabled' : ''}>${locked ? `Need ${UNLOCK_NEED[a.id] || 1} medals` : 'Fly'}</button>
         </div>
       </div>`;
     card.querySelector('[data-fly]').addEventListener('click', (e) => {
       e.stopPropagation();
+      if (!isUnlocked(a.id)) return;
       onSelect?.(a.id);
     });
     card.querySelector('[data-info]').addEventListener('click', (e) => {

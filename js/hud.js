@@ -1,4 +1,4 @@
-import { WORLD } from './world.js';
+import { WORLD, LANDMARKS } from './world.js';
 import { getAircraftInfo } from './aircraft-info.js';
 
 const MS_TO_KT = 1.94384;
@@ -23,6 +23,7 @@ export class HUD {
     this._toastT = 0;
     this._aircraftId = null;
     this.missionEl = document.getElementById('mission-banner');
+    this.navEl = document.getElementById('nav-chip');
   }
 
   setMission(text) {
@@ -127,6 +128,7 @@ export class HUD {
     this.gaugeVs?.classList.toggle('danger-hi', fpm < -2500);
 
     this._drawMinimap(x, z, heading);
+    if (this.navEl && state.nav) this.navEl.textContent = state.nav;
   }
 
   _drawMinimap(x, z, heading) {
@@ -237,6 +239,14 @@ export class HUD {
     ctx.font = 'bold 9px IBM Plex Sans, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('N', W / 2, 12);
+
+    ctx.font = 'bold 8px IBM Plex Sans, sans-serif';
+    ctx.fillStyle = 'rgba(234, 242, 255, 0.85)';
+    for (const lm of LANDMARKS || []) {
+      const [mx, mz] = wx(lm.x, lm.z);
+      if (mx < 8 || mz < 8 || mx > W - 8 || mz > H - 8) continue;
+      ctx.fillText(lm.name, mx, mz);
+    }
   }
 
   /** Prefill checklist from research info when starting a flight */

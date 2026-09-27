@@ -8,6 +8,7 @@ export class GameAudio {
     this.wind = null;
     this._unlocked = false;
     this._stallOn = false;
+    this.muted = false;
   }
 
   unlock() {
@@ -18,6 +19,7 @@ export class GameAudio {
     this.master = this.ctx.createGain();
     this.master.gain.value = 0.22;
     this.master.connect(this.ctx.destination);
+    if (this.muted) this.master.gain.value = 0;
     this._unlocked = true;
     this._startLoops();
     if (this.ctx.state === 'suspended') this.ctx.resume();
@@ -75,6 +77,16 @@ export class GameAudio {
     this._stallOn = stalling;
   }
 
+  setMuted(on) {
+    this.muted = !!on;
+    if (this.master) this.master.gain.value = on ? 0 : 0.22;
+  }
+
+  toggleMute() {
+    this.setMuted(!this.muted);
+    return this.muted;
+  }
+
   hush() {
     if (!this._unlocked) return;
     this.engGain?.gain.setTargetAtTime(0, this.ctx.currentTime, 0.08);
@@ -82,7 +94,7 @@ export class GameAudio {
   }
 
   beep(freq, dur = 0.12, type = 'square', vol = 0.12) {
-    if (!this._unlocked) return;
+    if (!this._unlocked || this.muted) return;
     const o = this.ctx.createOscillator();
     const g = this.ctx.createGain();
     o.type = type;

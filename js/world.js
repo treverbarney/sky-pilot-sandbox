@@ -26,6 +26,27 @@ export const WORLD = {
   ]
 };
 
+export const WIND = { x: 3.2, z: 1.4 };
+
+export const LANDMARKS = [
+  { id: 'rwy', name: 'RWY', x: 0, z: 0 },
+  { id: 'hangar', name: 'HGR', x: -80, z: -40 },
+  { id: 'lake', name: 'LAKE', x: 600, z: -400 },
+  { id: 'city', name: 'CITY', x: -500, z: 400 },
+  { id: 'npeak', name: 'PEAK', x: -200, z: 1100 },
+  { id: 'wpeak', name: 'WEST', x: -900, z: -800 },
+  { id: 'balloon', name: 'BAL', x: 60, z: -80 },
+  { id: 'rocket', name: 'RKT', x: 120, z: -100 }
+];
+
+export const STARS = [
+  { id: 'star-lake', x: 600, y: 55, z: -400 },
+  { id: 'star-city', x: -500, y: 90, z: 400 },
+  { id: 'star-peak', x: -200, y: 250, z: 1100 },
+  { id: 'star-west', x: -900, y: 300, z: -800 },
+  { id: 'star-field', x: 280, y: 35, z: 220 }
+];
+
 function groundColor(x, z) {
   const dx = x - WORLD.lake.x, dz = z - WORLD.lake.z;
   if (dx * dx + dz * dz < WORLD.lake.r * WORLD.lake.r) return null;
@@ -852,6 +873,47 @@ export function createWorld(scene, opts = {}) {
     }
   }
 
+  // Thick cartoon cloud banks over lake + peaks
+  {
+    const puff = new THREE.SphereGeometry(28, 10, 8);
+    const puffMat = new THREE.MeshLambertMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.78,
+      depthWrite: false
+    });
+    const banks = [
+      { x: 520, y: 220, z: -360, n: 7 },
+      { x: -180, y: 340, z: 980, n: 6 },
+      { x: 980, y: 380, z: -860, n: 6 },
+      { x: -40, y: 260, z: 180, n: 5 }
+    ];
+    banks.forEach((b, bi) => {
+      const g = new THREE.Group();
+      g.name = 'cloudbank';
+      g.userData.drift = 1.2 + bi * 0.3;
+      for (let i = 0; i < b.n; i++) {
+        const m = new THREE.Mesh(puff, puffMat);
+        m.position.set((i - 2) * 22, (i % 3) * 10, (i % 2) * 16);
+        m.scale.setScalar(0.7 + (i % 3) * 0.25);
+        g.add(m);
+      }
+      g.position.set(b.x, b.y, b.z);
+      root.add(g);
+    });
+  }
+
+  STARS.forEach((s) => {
+    const star = new THREE.Mesh(
+      new THREE.OctahedronGeometry(3.2, 0),
+      new THREE.MeshBasicMaterial({ color: 0xffe066 })
+    );
+    star.position.set(s.x, s.y, s.z);
+    star.name = 'hidestar';
+    star.userData.starId = s.id;
+    root.add(star);
+  });
+
   // Windsock + flock — world feels inhabited
   const sock = new THREE.Group();
   sock.name = 'windsock';
@@ -910,6 +972,10 @@ export function createWorld(scene, opts = {}) {
     nearRocket(x, z) {
       return Math.hypot(x - WORLD.rocketPad.x, z - WORLD.rocketPad.z) < 18;
     },
+    setDusk(on) {
+      scene.background = new THREE.Color(on ? 0x2a3a68 : 0x6ec8ff);
+      scene.fog = new THREE.FogExp2(on ? 0x6a7aa0 : 0xb8d8f4, on ? 0.00028 : 0.00018);
+    },
     /** Slow cloud drift — call from main loop */
     update(dt) {
       const t = performance.now() * 0.001;
@@ -917,6 +983,14 @@ export function createWorld(scene, opts = {}) {
         if (o.name === 'cloud' && o.userData.drift) {
           o.position.x += o.userData.drift * dt;
           if (o.position.x > 1600) o.position.x = -1600;
+        }
+        if (o.name === 'cloudbank' && o.userData.drift) {
+          o.position.x += o.userData.drift * dt;
+          if (o.position.x > 1700) o.position.x = -1700;
+        }
+        if (o.name === 'hidestar') {
+          o.rotation.y += dt * 1.6;
+          o.position.y += Math.sin(t * 2 + o.position.x) * 0.02;
         }
         if (o.userData.papiPulse && o.material && o.material.emissiveIntensity != null) {
           o.material.emissiveIntensity = 1.8 + Math.sin(t * 3.2) * 0.55;

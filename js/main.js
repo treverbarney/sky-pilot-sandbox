@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { AIRCRAFT, getAircraft, msToKt } from './aircraft-data.js';
 import { FlightModel } from './flight-model.js';
 import { createAircraftMesh } from './meshes.js';
-import { createWorld, WORLD, sampleHeight } from './world.js';
+import { createWorld, WORLD, sampleHeight, STARS } from './world.js';
 import { Controls } from './controls.js';
 import { ModeManager } from './modes.js';
 import { Effects } from './effects.js';
@@ -11,7 +11,7 @@ import { buildHangarGrid, openInfoSheet, fillHelpModal, wireHelp, displayNameFor
 import { Checklist } from './checklist.js';
 import { GameAudio } from './audio.js';
 import { FlightCourse } from './course.js';
-import { scoreTest, saveBest, bestFor, MEDAL } from './career.js';
+import { scoreTest, saveBest, bestFor, MEDAL, testKindFor, isUnlocked, saveStar, loadStars } from './career.js';
 import {
   loadGraphicsAssets,
   applyRendererQuality,
@@ -48,6 +48,9 @@ let clock = new THREE.Clock();
 let spawnPadPrompt = false;
 let ringPulse = 0;
 let _wasOnGround = false;
+let paused = false;
+let duskOn = false;
+let _airportToast = false;
 
 const el = {
   menu: document.getElementById('menu'),
@@ -105,6 +108,12 @@ async function bootGraphics() {
     setLoad(0.42);
     world = createWorld(scene, { qualityKey: getQualityKey() });
     setLoad(0.58);
+    {
+      const have = new Set(loadStars());
+      world.root?.traverse((o) => {
+        if (o.name === 'hidestar' && have.has(o.userData.starId)) o.visible = false;
+      });
+    }
     effects = new Effects(scene);
     modes = new ModeManager(scene);
     hud = new HUD();
@@ -238,6 +247,31 @@ function wireButtons() {
   document.getElementById('btn-bike').addEventListener('click', () => spawnVehicle('bike'));
   document.getElementById('btn-car').addEventListener('click', () => spawnVehicle('car'));
   document.getElementById('btn-teleport').addEventListener('click', () => teleportAirport());
+  document.getElementById('btn-mute')?.addEventListener('click', () => {
+    const on = audio?.toggleMute?.();
+    document.getElementById('btn-mute').textContent = on ? 'Sound off' : 'Sound on';
+  });
+  document.getElementById('btn-dusk')?.addEventListener('click', () => {
+    duskOn = !duskOn;
+    world?.setDusk?.(duskOn);
+    document.getElementById('btn-dusk').textContent = duskOn ? 'Dusk' : 'Day';
+  });
+  document.getElementById('btn-pause')?.addEventListener('click', () => setPaused(true));
+  document.getElementById('btn-resume')?.addEventListener('click', () => setPaused(false));
+  document.getElementById('btn-pause-hangar')?.addEventListener('click', () => {
+    setPaused(false);
+    showHangar();
+  });
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+      if (gameMode !== 'menu') setPaused(!paused);
+    }
+  });
+}
+
+function setPaused(on) {
+  paused = !!on;
+  document.getElementById('pause')?.classList.toggle('hidden', !paused);
 }
 
 function showHangar() {
@@ -245,6 +279,8 @@ function showHangar() {
   modes.clearActive();
   course?.clear();
   audio?.hush();
+  paused = false;
+  document.getElementById('pause')?.classList.add('hidden');
   gameMode = 'menu';
   el.menu.classList.remove('hidden');
   el.crash.classList.add('hidden');
@@ -274,6 +310,11 @@ function cleanupCraft() {
 }
 
 function startFlight(id) {
+  if (!isUnlocked(id)) {
+    hud?.toast?.('Earn more medals to unlock this aircraft');
+    if (el.status) el.status.textContent = 'Locked — bronze a few easier tests first.';
+    return;
+  }
   const spec = getAircraft(id);
   currentSpec = spec;
   cleanupCraft();
@@ -323,14 +364,18 @@ function startFlight(id) {
   }
   gameMode = 'flight';
   _wasOnGround = true;
+  paused = false;
+  _airportToast = false;
+  document.getElementById('pause')?.classList.add('hidden');
   const tip = spec.isHeli
     ? 'Raise COLL to hover'
     : spec.type === 'glider'
       ? 'Energy management — spoilers for path'
       : `Checklist: rotate ~${msToKt(spec.vr).toFixed(0)} kt`;
   hud.toast(`${label} — ${tip}`);
-  course?.layoutFor(spec);
-  hud.setMission(`TEST 0/${course.total} rings · land on runway`);
+  const kind = testKindFor(spec);
+  course?.layoutFor(spec, kind);
+  hud.setMission(`${kind.toUpperCase()} 0/${course.total} rings`);
 }
 
 
@@ -367,6 +412,10 @@ function syncMesh() {
   }
 }
 
+function buzz(ms = 18) {
+  try { navigator.vibrate?.(ms); } catch (_) { /* ignore */ }
+}
+
 function tryEject() {
   if (gameMode !== 'flight' || !flight || !currentSpec) return;
   if (!currentSpec.ejectOk) {
@@ -389,7 +438,7 @@ function tryEject() {
   document.getElementById('btn-car').classList.add('hidden');
   document.getElementById('btn-swoop').classList.remove('hidden');
   document.getElementById('btn-dive').classList.remove('hidden');
-  hud.toast('Parachute deployed — SWOOP near ground');
+  hud.toast('Canopy out — DIVE to lose height, SWOOP to flare and skim');
 }
 
 function tryBoardSpecial() {
@@ -441,7 +490,7 @@ function spawnVehicle(kind) {
   el.groundUi.classList.remove('hidden');
   document.getElementById('btn-swoop').classList.add('hidden');
   document.getElementById('btn-dive').classList.add('hidden');
-  hud.toast(`${kind === 'bike' ? 'Motorcycle' : 'Supercar'} — throttle to 200+ mph`);
+  hud.toast(`${kind === 'bike' ? 'Motorcycle ~270 mph' : 'Supercar ~310 mph'} — hold throttle, light steer aims hangar`);
 }
 
 function teleportAirport() {
@@ -644,6 +693,10 @@ function runwayApproachHints() {
 function loop() {
   requestAnimationFrame(loop);
   const dt = Math.min(clock.getDelta(), 0.05);
+  if (paused) {
+    if (renderer) renderer.render(scene, camera);
+    return;
+  }
   controls.update();
   effects.update(dt);
   world?.update?.(dt);
@@ -715,12 +768,25 @@ function loop() {
       const gained = course.update(flight.position);
       if (gained) {
         audio?.ring();
-        hud.setMission(`TEST ${course.hit}/${course.total} rings`);
+        buzz(12);
+        hud.setMission(`${(course.kind || 'TEST').toUpperCase()} ${course.hit}/${course.total} rings`);
         hud.toast(`Ring ${course.hit}/${course.total}`);
       }
       course.pulse(ringPulse);
     }
     audio?.setFlight(flight.throttle || flight.collective || 0, flight.getSpeed(), flight.stalling, flight.onGround);
+
+    for (const s of STARS) {
+      const dx = flight.position.x - s.x, dy = flight.position.y - s.y, dz = flight.position.z - s.z;
+      if (dx * dx + dy * dy + dz * dz < 22 * 22 && saveStar(s.id)) {
+        audio?.medal();
+        buzz(30);
+        hud.toast(`Star ${loadStars().length}/5`);
+        world?.root?.traverse?.((o) => {
+          if (o.name === 'hidestar' && o.userData.starId === s.id) o.visible = false;
+        });
+      }
+    }
 
     // Contrails at speed / altitude
     const spd = flight.getSpeed();
@@ -813,13 +879,21 @@ function loop() {
       vs: flight.getVerticalSpeed(),
       x: flight.position.x,
       z: flight.position.z,
-      heading: flight.euler.y
+      heading: flight.euler.y,
+      nav: `APT ${Math.round(Math.hypot(flight.position.x - WORLD.hangar.x, flight.position.z - WORLD.hangar.z))} m`
     });
   }
 
   if (gameMode === 'chute' || gameMode === 'vehicle' || gameMode === 'balloon' || gameMode === 'rocket') {
     const ev = modes.update(dt, controls, world);
     if (ev?.event === 'chute_land') onChuteLand(ev.pos);
+    if (ev?.event === 'airport_arrive' && !_airportToast) {
+      _airportToast = true;
+      hud.toast('Back at the airport — teleport or hangar');
+    }
+    if (ev?.event === 'chute_state' && ev.skimming) {
+      hud.setMission(`SKIM ${Math.round(ev.speed)} m/s · ${ev.agl.toFixed(0)} m AGL`);
+    }
     if (ev?.event === 'crash') handleCrash(ev.reason);
     if (ev?.event === 'balloon_land') hud.toast('Balloon secured');
     if (ev?.event === 'space') hud.toast('SPACE — prepare for reentry');
@@ -853,7 +927,8 @@ function loop() {
       vs: modes.vel.y,
       x: pos.x,
       z: pos.z,
-      heading: modes.heading || 0
+      heading: modes.heading || 0,
+      nav: `APT ${Math.round(Math.hypot(pos.x - WORLD.hangar.x, pos.z - WORLD.hangar.z))} m`
     });
   }
 

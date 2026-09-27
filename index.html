@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="css/style.css?v=8" />
+  <link rel="stylesheet" href="css/style.css?v=9" />
   <title>Sky Pilot Sandbox</title>
   <!-- Vite resolves three from node_modules; for plain python -m http.server use the CDN importmap in README -->
 </head>
@@ -32,6 +32,7 @@
       <div id="flare-cue" class="flare-cue hidden">FLARE · IDLE</div>
       <div id="approach-cue" class="approach-cue hidden"></div>
       <div id="mission-banner" class="mission-banner hidden"></div>
+      <div id="nav-chip" class="nav-chip">APT</div>
       <div class="minimap-label">MAP</div>
       <canvas id="minimap" width="140" height="140" aria-label="Minimap"></canvas>
       <div id="toast" class="toast hidden"></div>
@@ -95,6 +96,7 @@
             <button type="button" id="btn-smoke" class="ctrl-btn hidden hold-btn">SMOKE</button>
             <button type="button" id="btn-ballast" class="ctrl-btn hidden">BALLAST</button>
             <button type="button" id="btn-camera" class="ctrl-btn">CAM</button>
+            <button type="button" id="btn-pause" class="ctrl-btn">II</button>
             <button type="button" id="btn-eject" class="ctrl-btn danger">JUMP</button>
             <button type="button" id="btn-help-flight" class="ctrl-btn">?</button>
           </div>
@@ -127,6 +129,8 @@
             <p class="tagline">Flight school · rings · medals · 10 aircraft</p>
           </div>
           <button id="btn-quality" type="button" class="btn btn-ghost" title="Graphics quality">GFX Med</button>
+          <button id="btn-dusk" type="button" class="btn btn-ghost" title="Day / dusk">Day</button>
+          <button id="btn-mute" type="button" class="btn btn-ghost" title="Mute">Sound on</button>
           <button id="btn-help" type="button" class="btn btn-ghost" title="Help">Help</button>
         </div>
         <p id="status-msg" class="status">Enable motion on phone, then open Info or Fly.</p>
@@ -135,7 +139,7 @@
         </div>
         <div id="aircraft-grid" class="aircraft-grid"></div>
         <p class="hint">Tilt phone · PRI/SYS panels · WASD/QE · [ ] flaps · G gear · X spoilers · O arm · V AB · T TV · B brake · H reverse · 1 TOGA · M smoke</p>
-        <p class="hint dim">Each Fly is a flight test: green rings then a landing. Bronze 70 · Silver 80 · Gold 90. Explore after you land. Orange/red pads: balloon & rocket.</p>
+        <p class="hint dim">Fly Cessna first for a bronze (70). That unlocks more planes. JUMP → DIVE/SWOOP chute, then bike/car home. Map labels: HGR LAKE CITY PEAK. Five hidden stars.</p>
       </div>
     </div>
 
@@ -177,6 +181,15 @@
       </div>
     </div>
 
+    <div id="pause" class="overlay hidden">
+      <div class="panel">
+        <h2>Paused</h2>
+        <p>P or Esc. Map: HGR hangar · RWY · LAKE · CITY · PEAK · BAL balloon · RKT rocket.</p>
+        <button id="btn-resume" type="button" class="btn btn-primary">Resume</button>
+        <button id="btn-pause-hangar" type="button" class="btn btn-secondary">Hangar</button>
+      </div>
+    </div>
+
     <div id="loading" class="overlay">
       <div class="panel">
         <h2>Loading world…</h2>
@@ -184,6 +197,6 @@
       </div>
     </div>
   </div>
-  <script type="module" src="js/main.js?v=8"></script>
+  <script type="module" src="js/main.js?v=9"></script>
 </body>
 </html>

@@ -13,9 +13,10 @@ export class FlightCourse {
     scene.add(this.group);
   }
 
-  layoutFor(spec) {
+  layoutFor(spec, kind = 'circuit') {
     this.clear();
-    const pts = this._points(spec);
+    this.kind = kind;
+    const pts = this._points(spec, kind);
     const mat = new THREE.MeshBasicMaterial({
       color: 0x3dff9a,
       transparent: true,
@@ -44,13 +45,40 @@ export class FlightCourse {
     this.active = true;
   }
 
-  _points(spec) {
-    if (spec?.isHeli) {
+  _points(spec, kind = 'circuit') {
+    if (kind === 'hover' || spec?.isHeli) {
       return [
         { x: -40, y: 18, z: -40, r: 8 },
         { x: 40, y: 28, z: 40, r: 8 },
         { x: 90, y: 22, z: -20, r: 8 },
-        { x: WORLD_PAD, y: 16, z: 20, r: 9 }
+        { x: 0, y: 16, z: 20, r: 9 }
+      ];
+    }
+    if (kind === 'lake') {
+      return [
+        { x: 420, y: 50, z: -280, r: 16 },
+        { x: 600, y: 40, z: -400, r: 18 },
+        { x: 760, y: 48, z: -320, r: 16 },
+        { x: 520, y: 32, z: -520, r: 14 },
+        { x: 280, y: 28, z: -200, r: 14 }
+      ];
+    }
+    if (kind === 'peak') {
+      return [
+        { x: -120, y: 140, z: 600, r: 18 },
+        { x: -200, y: 220, z: 900, r: 16 },
+        { x: 40, y: 160, z: 1000, r: 16 },
+        { x: 80, y: 90, z: 520, r: 14 },
+        { x: 0, y: 36, z: -200, r: 12 }
+      ];
+    }
+    if (kind === 'city') {
+      return [
+        { x: -220, y: 90, z: 180, r: 16 },
+        { x: -500, y: 110, z: 400, r: 16 },
+        { x: -620, y: 80, z: 260, r: 14 },
+        { x: -280, y: 55, z: 80, r: 14 },
+        { x: 0, y: 34, z: -380, r: 12 }
       ];
     }
     if (spec?.type === 'glider') {
@@ -111,5 +139,3 @@ export class FlightCourse {
     }
   }
 }
-
-const WORLD_PAD = 0;

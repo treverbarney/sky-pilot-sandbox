@@ -1496,3 +1496,21 @@ button, input {
 .medal-silver { color: #d0d8e8; }
 .medal-gold { color: #ffd24a; }
 
+.ac-card.locked { opacity: 0.55; filter: grayscale(0.35); }
+.ac-card.locked .btn-card-fly { pointer-events: none; }
+
+.nav-chip {
+  position: absolute;
+  left: 12px;
+  top: calc(86px + var(--safe-t));
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--accent2);
+  background: rgba(8, 16, 32, 0.65);
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  padding: 4px 10px;
+  pointer-events: none;
+}
+

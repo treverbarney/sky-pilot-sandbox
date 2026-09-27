@@ -3,7 +3,7 @@ import {
   createParachuteMesh, createMotorcycleMesh, createSupercarMesh,
   createBalloonMesh, createRocketMesh
 } from './meshes.js';
-import { sampleHeight, WORLD } from './world.js';
+import { sampleHeight, WORLD, WIND } from './world.js';
 
 /** Alternate play modes after eject / at pads */
 export class ModeManager {
@@ -110,75 +110,91 @@ export class ModeManager {
   }
 
   _updateChute(dt, controls, world) {
-    // Steer with aileron/elevator
     const steer = controls.aileron;
     const pitch = controls.elevator;
-    this.heading += steer * 1.8 * dt;
+    this.heading += steer * 1.6 * dt;
     const fwd = new THREE.Vector3(Math.sin(this.heading), 0, Math.cos(this.heading));
     const ground = world.getHeight(this.pos.x, this.pos.z);
     const agl = this.pos.y - ground;
 
-    // Dive: fast sink; swoop: bleed height into forward skim near ground
-    let sink = this.dive ? 36 : 11;
-    let horiz = this.dive ? 22 : 11;
-    if (this.swoop) {
-      if (agl < 90) {
-        sink = Math.max(0.5, sink - 18);
-        horiz = 40 + Math.min(55, (90 - agl) * 0.7);
-      }
-      // Ground skim band ~1.5–4 m AGL — long enjoyable float
-      if (agl < 12 && agl > 1.5) {
-        sink = Math.min(sink, 2.5);
-        horiz = Math.max(horiz, 48);
-        this.vel.y = Math.max(this.vel.y, -2.0);
+    // Canopy: ~5.5 m/s sink, modest forward. Dive = front risers. Swoop = flare.
+    const dive = this.dive;
+    const flare = this.swoop;
+    let sink = dive ? 20 : 5.8;
+    let horiz = dive ? 26 : 9;
+    if (flare) {
+      if (agl > 70) {
+        sink = dive ? 16 : 4.2;
+        horiz = dive ? 30 : 14;
+      } else if (agl > 18) {
+        sink = 2.2;
+        horiz = 34 + Math.min(28, (70 - agl) * 0.35);
+      } else if (agl > 1.6) {
+        // Ground skim — convert leftover energy into a long fast pass
+        sink = 0.4;
+        horiz = Math.max(38, 22 + agl * 1.8);
+        this.vel.y = Math.max(this.vel.y, -1.2);
       }
     }
-    if (this.dive && this.swoop) {
-      // Dive+swoop: steep then flare skim
-      if (agl > 40) { sink = 40; horiz = 28; }
-      else { sink = 3; horiz = 60; }
+    if (dive && flare && agl > 40) {
+      sink = 24;
+      horiz = 32;
     }
 
-    this.vel.x = fwd.x * horiz + pitch * fwd.x * -6;
-    this.vel.z = fwd.z * horiz + pitch * fwd.z * -6;
-    let targetVy = -sink + (this.swoop && agl < 50 ? 10 : 0);
-    this.vel.y += (targetVy - this.vel.y) * Math.min(1, 4 * dt);
+    const windX = (WIND?.x || 0);
+    const windZ = (WIND?.z || 0);
+    this.vel.x = fwd.x * horiz + pitch * fwd.x * -5 + windX;
+    this.vel.z = fwd.z * horiz + pitch * fwd.z * -5 + windZ;
+    const lift = flare && agl < 50 ? 7 : 0;
+    const targetVy = -sink + lift;
+    this.vel.y += (targetVy - this.vel.y) * Math.min(1, 3.2 * dt);
 
     this.pos.addScaledVector(this.vel, dt);
     const g2 = world.getHeight(this.pos.x, this.pos.z);
     this.mesh.position.copy(this.pos);
     this.mesh.rotation.y = this.heading;
-    this.mesh.rotation.z = -steer * 0.35;
-    this.mesh.rotation.x = this.dive ? 0.35 : (this.swoop ? -0.15 : 0);
+    this.mesh.rotation.z = -steer * 0.4;
+    this.mesh.rotation.x = dive ? 0.42 : (flare ? -0.22 : 0.05);
 
-    // Skim: delay touch while swooping above ~1.4 m
-    const touchAgl = (this.swoop && this.vel.y > -4) ? 1.35 : 1.5;
-    if (this.pos.y <= g2 + touchAgl) {
+    const speed = Math.hypot(this.vel.x, this.vel.z);
+    const skimming = flare && agl > 1.45 && agl < 16 && speed > 14;
+    const touchAgl = skimming ? 1.25 : 1.55;
+    if (this.pos.y <= g2 + touchAgl && !skimming) {
       this.pos.y = g2 + 1.5;
       return { event: 'chute_land', pos: this.pos.clone() };
     }
-    return null;
+    if (this.pos.y < g2 + 1.2) {
+      this.pos.y = g2 + 1.5;
+      return { event: 'chute_land', pos: this.pos.clone() };
+    }
+    return { event: 'chute_state', agl, speed, skimming };
   }
 
   _updateVehicle(dt, controls, world) {
-    // 200 mph ≈ 89.4 m/s — both exceed that
-    const maxSpd = this.mode === 'bike' ? 100 : 115;
-    const accel = this.mode === 'bike' ? 38 : 42;
+    // Ultra-fast return: bike ~270 mph, car ~310 mph
+    const maxSpd = this.mode === 'bike' ? 122 : 140;
+    const accel = this.mode === 'bike' ? 48 : 52;
     const thr = controls.throttle;
-    const steer = controls.aileron + controls.rudder * 0.5;
+    const steer = controls.aileron + controls.rudder * 0.55;
 
     const speed = Math.hypot(this.vel.x, this.vel.z);
-    const target = thr * maxSpd;
-    const dir = speed > 1
-      ? Math.atan2(this.vel.x, this.vel.z)
-      : this.heading;
-    this.heading = dir + steer * (0.8 + speed * 0.01) * dt * (thr > 0.05 || speed > 5 ? 1 : 0.3);
+    const dir = speed > 1 ? Math.atan2(this.vel.x, this.vel.z) : this.heading;
+    this.heading = dir + steer * (0.7 + speed * 0.008) * dt * (thr > 0.05 || speed > 5 ? 1 : 0.25);
+
+    // Light auto-aim toward hangar when not steering hard
+    if (Math.abs(steer) < 0.12 && thr > 0.2) {
+      const want = Math.atan2(WORLD.hangar.x - this.pos.x, WORLD.hangar.z - this.pos.z);
+      let d = want - this.heading;
+      while (d > Math.PI) d -= Math.PI * 2;
+      while (d < -Math.PI) d += Math.PI * 2;
+      this.heading += d * Math.min(0.9, dt * 1.4);
+    }
 
     const fwd = new THREE.Vector3(Math.sin(this.heading), 0, Math.cos(this.heading));
     let spd = speed;
     if (thr > 0.02) spd = Math.min(maxSpd, spd + accel * thr * dt);
-    else spd = Math.max(0, spd - 15 * dt);
-    if (controls.brakes) spd = Math.max(0, spd - 50 * dt);
+    else spd = Math.max(0, spd - 18 * dt);
+    if (controls.brakes) spd = Math.max(0, spd - 62 * dt);
 
     this.vel.x = fwd.x * spd;
     this.vel.z = fwd.z * spd;
@@ -186,16 +202,19 @@ export class ModeManager {
     this.pos.x += this.vel.x * dt;
     this.pos.z += this.vel.z * dt;
     const ground = world.getHeight(this.pos.x, this.pos.z);
-    // Water wipeout
-    if (world.isWater(this.pos.x, this.pos.z) && spd > 20) {
+    if (world.isWater(this.pos.x, this.pos.z) && spd > 28) {
       this.alive = false;
       return { event: 'crash', reason: 'drove into lake' };
     }
     this.pos.y = ground + 0.5;
     this.mesh.position.copy(this.pos);
     this.mesh.rotation.y = this.heading;
-    this.mesh.rotation.z = -steer * Math.min(0.35, spd / 80);
-    return null;
+    this.mesh.rotation.z = -steer * Math.min(0.4, spd / 90);
+    const distH = Math.hypot(this.pos.x - WORLD.hangar.x, this.pos.z - WORLD.hangar.z);
+    if (distH < 55 && spd < 25) {
+      return { event: 'airport_arrive' };
+    }
+    return { event: 'vehicle_state', speed: spd, distH };
   }
 
   _updateBalloon(dt, controls, world) {
