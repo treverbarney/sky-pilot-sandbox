@@ -3,8 +3,8 @@ import * as THREE from 'three';
 /** Quality: low | medium | high — persisted in localStorage */
 export const QUALITY = {
   low: { dpr: 1.0, useEnv: false, useStandardWorld: false, clouds: false, anisotropy: 2, label: 'Low' },
-  medium: { dpr: 1.5, useEnv: true, useStandardWorld: true, clouds: false, anisotropy: 4, label: 'Medium' },
-  high: { dpr: 2.0, useEnv: true, useStandardWorld: true, clouds: true, anisotropy: 4, label: 'High' }
+  medium: { dpr: 1.6, useEnv: true, useStandardWorld: true, clouds: true, anisotropy: 4, label: 'Medium' },
+  high: { dpr: 2.0, useEnv: true, useStandardWorld: true, clouds: true, anisotropy: 8, label: 'High' }
 };
 
 export function getQualityKey() {
@@ -116,13 +116,13 @@ export async function loadGraphicsAssets(renderer, qualityKey = getQualityKey())
 export function makeToonPbr({
   color = 0xffffff,
   map = null,
-  roughness = 0.65,
-  metalness = 0.05,
+  roughness = 0.52,
+  metalness = 0.08,
   emissive = 0x000000,
   emissiveIntensity = 0,
   transparent = false,
   opacity = 1,
-  envMapIntensity = 0.45,
+  envMapIntensity = 0.62,
   flatShading = false,
   side = THREE.FrontSide
 } = {}) {
@@ -156,12 +156,12 @@ export function makeFarLambert(color, map = null, opts = {}) {
 
 export function makeGlass() {
   const m = makeToonPbr({
-    color: 0x88ccee,
-    roughness: 0.15,
-    metalness: 0.1,
+    color: 0x9ad8ff,
+    roughness: 0.12,
+    metalness: 0.12,
     transparent: true,
-    opacity: 0.55,
-    envMapIntensity: 0.7
+    opacity: 0.48,
+    envMapIntensity: 0.95
   });
   return m;
 }
@@ -177,9 +177,9 @@ export function aircraftKit(spec, qualityKey = getQualityKey()) {
   const compMap = tex.aircraftComposite || null;
 
   let bodyMap = paintMap;
-  let metalness = 0.08;
-  let roughness = 0.65;
-  let envI = 0.4;
+  let metalness = 0.1;
+  let roughness = 0.52;
+  let envI = 0.58;
 
   if (spec.type === 'fighter' || spec.type === 'experimental') {
     bodyMap = compMap || paintMap;

@@ -531,9 +531,9 @@ function kitGlider(g, kit) {
 function kitHeli(g, kit) {
   const { body, accent, dark, glass, metal } = kit;
   // Cabin + bubble
-  addBox(g, 1.4, 1.1, 2.5, body, 0, 0.75, 0.1);
+  addFuselage(g, 0.72, 2.4, body, 0.7);
   const bubble = new THREE.Mesh(
-    new THREE.SphereGeometry(0.85, 14, 12),
+    new THREE.SphereGeometry(0.92, 16, 14),
     makeToonPbr({
       color: 0xaaddff,
       transparent: true,

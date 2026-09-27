@@ -55,21 +55,34 @@ export function createWorld(scene, opts = {}) {
   root.name = 'world';
 
   // Sky + fog — stylized depth
-  scene.background = new THREE.Color(0x5aadef);
-  // Slight dusk-lean fog tint (readable night approach without full TOD)
-  scene.fog = new THREE.FogExp2(0xa8c4e8, 0.00024);
+  scene.background = new THREE.Color(0x6ec8ff);
+  scene.fog = new THREE.FogExp2(0xb8d8f4, 0.00018);
   if (getEnvMap()) scene.environment = getEnvMap();
 
   // Lighting — warm key, cool fill
-  const hemi = new THREE.HemisphereLight(0xc8e4ff, 0x3d5a32, 0.78);
+  const hemi = new THREE.HemisphereLight(0xd8f0ff, 0x4a7a3a, 0.95);
   scene.add(hemi);
-  const sun = new THREE.DirectionalLight(0xfff1d6, 1.15);
+  const sun = new THREE.DirectionalLight(0xfff4d2, 1.35);
   sun.position.set(280, 480, 160);
   scene.add(sun);
-  const fill = new THREE.DirectionalLight(0x88aadd, 0.32);
+  const fill = new THREE.DirectionalLight(0x8ec8ff, 0.42);
   fill.position.set(-200, 120, -180);
   scene.add(fill);
-  scene.add(new THREE.AmbientLight(0x405060, 0.2));
+  scene.add(new THREE.AmbientLight(0x607888, 0.28));
+
+  // Cartoon sun disc
+  const sunBall = new THREE.Mesh(
+    new THREE.SphereGeometry(46, 16, 12),
+    new THREE.MeshBasicMaterial({ color: 0xffe08a, fog: false })
+  );
+  sunBall.position.set(620, 520, 280);
+  root.add(sunBall);
+  const sunHalo = new THREE.Mesh(
+    new THREE.SphereGeometry(70, 16, 12),
+    new THREE.MeshBasicMaterial({ color: 0xfff2b0, transparent: true, opacity: 0.28, fog: false })
+  );
+  sunHalo.position.copy(sunBall.position);
+  root.add(sunHalo);
 
   // Ground — vertex color base + optional grass detail map
   const segs = 80;
@@ -728,6 +741,27 @@ export function createWorld(scene, opts = {}) {
     root.add(leaves);
   }
 
+  // Cartoon shrubs around the airport
+  {
+    const n = qualityKey === 'low' ? 10 : 22;
+    const bushGeo = new THREE.SphereGeometry(1.4, 8, 6);
+    const bushM = useStd
+      ? makeToonPbr({ color: 0x3db85a, roughness: 0.9, metalness: 0.02 })
+      : makeFarLambert(0x3db85a);
+    const bushes = new THREE.InstancedMesh(bushGeo, bushM, n);
+    const td = new THREE.Object3D();
+    for (let i = 0; i < n; i++) {
+      const ang = (i / n) * Math.PI * 2;
+      td.position.set(Math.cos(ang) * (90 + (i % 5) * 18), 1.1, Math.sin(ang) * (140 + (i % 4) * 20) - 20);
+      const s = 0.8 + (i % 4) * 0.25;
+      td.scale.set(s, s * 0.7, s);
+      td.updateMatrix();
+      bushes.setMatrixAt(i, td.matrix);
+    }
+    bushes.instanceMatrix.needsUpdate = true;
+    root.add(bushes);
+  }
+
   // Balloon & rocket pads + pulsing rings
   const bpad = new THREE.Mesh(
     new THREE.CylinderGeometry(9, 9, 0.45, 16),
@@ -794,7 +828,7 @@ export function createWorld(scene, opts = {}) {
 
   // Optional cloud planes (High)
   if (q.clouds && tex.clouds) {
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 8; i++) {
       const c = new THREE.Mesh(
         new THREE.PlaneGeometry(600 + Math.random() * 400, 220 + Math.random() * 120),
         new THREE.MeshBasicMaterial({

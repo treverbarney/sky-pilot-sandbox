@@ -30,7 +30,7 @@ let renderer = null;
 let webglOk = false;
 
 function createRenderer() {
-  const r = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
+  const r = new THREE.WebGLRenderer({ canvas, antialias: getQualityKey() !== 'low', powerPreference: 'high-performance' });
   r.setSize(window.innerWidth, window.innerHeight, false);
   r.outputColorSpace = THREE.SRGBColorSpace;
   applyRendererQuality(r, getQualityKey());
