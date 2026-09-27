@@ -818,6 +818,39 @@ export function createWorld(scene, opts = {}) {
     }
   }
 
+  // Windsock + flock — world feels inhabited
+  const sock = new THREE.Group();
+  sock.name = 'windsock';
+  const pole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.12, 0.16, 9, 8),
+    makeFarLambert(0xc9c4b8)
+  );
+  pole.position.y = 4.5;
+  sock.add(pole);
+  const cone = new THREE.Mesh(
+    new THREE.ConeGeometry(0.7, 3.2, 8, 1, true),
+    makeToonPbr({ color: 0xff7a2a, roughness: 0.7, metalness: 0.05, side: THREE.DoubleSide })
+  );
+  cone.rotation.z = Math.PI / 2;
+  cone.position.set(1.6, 8.4, 0);
+  cone.name = 'sockCone';
+  sock.add(cone);
+  sock.position.set(-38, 0, -70);
+  root.add(sock);
+
+  const flock = new THREE.Group();
+  flock.name = 'flock';
+  const birdGeo = new THREE.ConeGeometry(0.35, 1.1, 4);
+  const birdMat = makeFarLambert(0x1a1a22);
+  for (let i = 0; i < 10; i++) {
+    const b = new THREE.Mesh(birdGeo, birdMat);
+    b.rotation.x = Math.PI / 2;
+    b.userData.phase = i * 0.7;
+    flock.add(b);
+  }
+  flock.position.set(180, 70, 120);
+  root.add(flock);
+
   scene.add(root);
 
   const heightData = { geo, size: WORLD.size, segs };
@@ -853,6 +886,20 @@ export function createWorld(scene, opts = {}) {
         }
         if (o.userData.papiPulse && o.material && o.material.emissiveIntensity != null) {
           o.material.emissiveIntensity = 1.8 + Math.sin(t * 3.2) * 0.55;
+        }
+        if (o.name === 'sockCone') {
+          o.rotation.y = Math.sin(t * 1.4) * 0.35;
+        }
+        if (o.name === 'flock') {
+          o.position.x = 180 + Math.sin(t * 0.18) * 90;
+          o.position.z = 120 + Math.cos(t * 0.14) * 70;
+          o.children.forEach((b, i) => {
+            b.position.set(
+              Math.sin(t * 0.9 + b.userData.phase) * 6,
+              Math.sin(t * 2 + i) * 1.4,
+              i * 2.2 - 10
+            );
+          });
         }
       });
       if (lightMat) {

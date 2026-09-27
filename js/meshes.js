@@ -400,13 +400,10 @@ function kitAmphibian(g, kit) {
   const gearMetal = kit.oleo || metal;
   const gearTire = kit.tire || dark;
   const len = 5.2;
-  addCyl(g, 0.48, 0.55, len, 10, body, 0, 0.55, 0, Math.PI / 2, 0, 0);
-  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.48, 1.2, 10), body);
-  nose.rotation.x = -Math.PI / 2;
-  nose.position.set(0, 0.55, len / 2 + 0.3);
-  g.add(nose);
+  addFuselage(g, 0.52, len, body, 0.55);
+  addSphere(g, 0.48, 12, body, 0, 0.55, len / 2 + 0.15, 0.95, 0.82, 1.2);
   // High wing
-  addBox(g, 10.2, 0.14, 1.55, body, 0, 1.35, 0.2);
+  addWing(g, 10.2, 0.14, 1.55, body, 1.35, 0.2);
   addFlapHint(g, 7.2, 0.34, dark, 1.32, -0.45);
   addBox(g, 0.16, 1.05, 0.16, dark, -1.5, 0.9, 0.15);
   addBox(g, 0.16, 1.05, 0.16, dark, 1.5, 0.9, 0.15);
@@ -440,9 +437,9 @@ function kitAerobatic(g, kit) {
   const gearMetal = kit.oleo || metal;
   const gearTire = kit.tire || dark;
   const len = 3.6;
-  addCyl(g, 0.3, 0.4, len, 10, body, 0, 0.3, 0, Math.PI / 2, 0, 0);
-  // Mid wing — short span, thick chord
-  addBox(g, 6.8, 0.14, 1.5, accent, 0, 0.3, 0.15);
+  addFuselage(g, 0.36, len, body, 0.3);
+  addWing(g, 6.8, 0.14, 1.5, accent, 0.3, 0.15);
+  addSphere(g, 0.42, 12, glass, 0, 0.62, 0.45, 1.1, 0.7, 1.2);
   addFlapHint(g, 4.8, 0.3, dark, 0.27, -0.5);
   // Tall rudder, short couple
   addBox(g, 2.2, 0.09, 0.5, body, 0, 0.4, -1.45);
@@ -469,13 +466,13 @@ function kitCargo(g, kit) {
   const gearMetal = kit.oleo || metal;
   const gearTire = kit.tire || dark;
   const len = 8.0;
-  // Blunt boxy freighter fuse
-  addBox(g, 1.75, 1.85, len, body, 0, 1.0, 0);
+  addFuselage(g, 0.92, len * 0.92, body, 1.0);
+  addSphere(g, 0.88, 12, body, 0, 0.95, len / 2 - 0.2, 1.05, 0.9, 1.15);
   addBox(g, 1.65, 1.5, 1.4, body, 0, 0.95, len / 2 - 0.15);
   // Ramp hint at rear
   addBox(g, 1.5, 0.12, 1.2, dark, 0, 0.2, -len / 2 + 0.4, 0.35, 0, 0);
   // High wing
-  addBox(g, 14.5, 0.18, 2.4, body, 0, 1.95, 0.25);
+  addWing(g, 14.5, 0.18, 2.4, body, 1.95, 0.25);
   addFlapHint(g, 10, 0.4, dark, 1.9, -0.8);
   addBox(g, 5.0, 0.14, 1.2, body, 0, 1.7, -3.6);
   addBox(g, 0.16, 2.3, 1.4, accent, 0, 2.55, -3.7);
@@ -512,9 +509,9 @@ function kitGlider(g, kit) {
   const { body, accent, dark, glass, metal } = kit;
   const gearMetal = kit.oleo || metal;
   const gearTire = kit.tire || dark;
-  addCyl(g, 0.18, 0.26, 5.6, 10, body, 0, 0.2, 0, Math.PI / 2, 0, 0);
-  // Extremely long thin wings
-  addBox(g, 16.5, 0.08, 0.75, body, 0, 0.32, 0.2);
+  addFuselage(g, 0.24, 5.6, body, 0.2);
+  addWing(g, 16.5, 0.08, 0.75, body, 0.32, 0.2);
+  addSphere(g, 0.28, 12, glass, 0, 0.38, 1.4, 1.2, 0.7, 1.1);
   addFlapHint(g, 11, 0.22, accent, 0.3, -0.2);
   addBox(g, 0.06, 0.4, 0.3, accent, -8.15, 0.5, 0.2);
   addBox(g, 0.06, 0.4, 0.3, accent, 8.15, 0.5, 0.2);

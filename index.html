@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="css/style.css?v=6" />
+  <link rel="stylesheet" href="css/style.css?v=7" />
   <title>Sky Pilot Sandbox</title>
   <!-- Vite resolves three from node_modules; for plain python -m http.server use the CDN importmap in README -->
 </head>
@@ -31,6 +31,7 @@
       <div id="stall-warn" class="stall-warn hidden">STALL</div>
       <div id="flare-cue" class="flare-cue hidden">FLARE · IDLE</div>
       <div id="approach-cue" class="approach-cue hidden"></div>
+      <div id="mission-banner" class="mission-banner hidden"></div>
       <div class="minimap-label">MAP</div>
       <canvas id="minimap" width="140" height="140" aria-label="Minimap"></canvas>
       <div id="toast" class="toast hidden"></div>
@@ -123,7 +124,7 @@
               <span class="hangar-mark" aria-hidden="true">✈</span>
               <h1>Sky Pilot</h1>
             </div>
-            <p class="tagline">Hangar · 10 aircraft · procedures · chute · vehicles · pads</p>
+            <p class="tagline">Flight school · rings · medals · 10 aircraft</p>
           </div>
           <button id="btn-quality" type="button" class="btn btn-ghost" title="Graphics quality">GFX Med</button>
           <button id="btn-help" type="button" class="btn btn-ghost" title="Help">Help</button>
@@ -134,7 +135,7 @@
         </div>
         <div id="aircraft-grid" class="aircraft-grid"></div>
         <p class="hint">Tilt phone · PRI/SYS panels · WASD/QE · [ ] flaps · G gear · X spoilers · O arm · V AB · T TV · B brake · H reverse · 1 TOGA · M smoke</p>
-        <p class="hint dim">Checklists track takeoff/landing. Orange/red pads: balloon &amp; rocket.</p>
+        <p class="hint dim">Each Fly is a flight test: green rings then a landing. Bronze 70 · Silver 80 · Gold 90. Explore after you land. Orange/red pads: balloon & rocket.</p>
       </div>
     </div>
 
@@ -168,6 +169,7 @@
     <div id="landed" class="overlay hidden">
       <div class="panel">
         <h2>Landing success</h2>
+        <p id="land-medal" class="medal-line"></p>
         <p id="land-msg">Nice greaser.</p>
         <button id="btn-land-again" type="button" class="btn btn-primary">Fly again</button>
         <button id="btn-land-hangar" type="button" class="btn btn-secondary">Hangar</button>
@@ -182,6 +184,6 @@
       </div>
     </div>
   </div>
-  <script type="module" src="js/main.js?v=6"></script>
+  <script type="module" src="js/main.js?v=7"></script>
 </body>
 </html>

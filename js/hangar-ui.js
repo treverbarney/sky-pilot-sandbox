@@ -6,6 +6,7 @@ import { AIRCRAFT } from './aircraft-data.js';
 import {
   AIRCRAFT_INFO, DIFF_LABEL, DIFF_HINT, SILHOUETTE_SVG, getAircraftInfo
 } from './aircraft-info.js';
+import { bestFor, MEDAL } from './career.js';
 
 const HELP_SEEN_KEY = 'sky-pilot-help-seen-v1';
 
@@ -34,6 +35,12 @@ export function buildHangarGrid(gridEl, { onSelect, onInfo }) {
         </div>
         <p class="ac-class">${info.classLabel || a.type || ''}${info.fictional ? ' · <em>Fictional</em>' : ''}</p>
         <p class="ac-blurb">${info.blurb || a.blurb}</p>
+        ${(() => {
+          const b = bestFor(a.id);
+          if (!b) return '<p class="ac-medal dim">No medal yet — fly the rings</p>';
+          const lab = MEDAL[b.medal]?.label || b.medal;
+          return `<p class="ac-medal medal-${b.medal}">${lab} · ${b.points}/100</p>`;
+        })()}
         <div class="ac-card-actions">
           <button type="button" class="btn-card-info" data-info="${a.id}">Info</button>
           <button type="button" class="btn-card-fly" data-fly="${a.id}">Fly</button>

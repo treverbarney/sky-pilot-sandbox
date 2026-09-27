@@ -22,6 +22,13 @@ export class HUD {
     this.checklistList = document.getElementById('checklist-list');
     this._toastT = 0;
     this._aircraftId = null;
+    this.missionEl = document.getElementById('mission-banner');
+  }
+
+  setMission(text) {
+    if (!this.missionEl) return;
+    this.missionEl.textContent = text || '';
+    this.missionEl.classList.toggle('hidden', !text);
   }
 
   setAircraft(name, id = null) {

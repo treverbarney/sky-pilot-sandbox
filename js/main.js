@@ -9,6 +9,9 @@ import { Effects } from './effects.js';
 import { HUD } from './hud.js';
 import { buildHangarGrid, openInfoSheet, fillHelpModal, wireHelp, displayNameFor } from './hangar-ui.js';
 import { Checklist } from './checklist.js';
+import { GameAudio } from './audio.js';
+import { FlightCourse } from './course.js';
+import { scoreTest, saveBest, bestFor, MEDAL } from './career.js';
 import {
   loadGraphicsAssets,
   applyRendererQuality,
@@ -34,7 +37,7 @@ function createRenderer() {
   return r;
 }
 
-let world, effects, modes, hud, controls, helpApi, checklist;
+let world, effects, modes, hud, controls, helpApi, checklist, audio, course;
 let checklistStatus = null;
 let flight = null;
 let craftMesh = null;
@@ -107,6 +110,11 @@ async function bootGraphics() {
     hud = new HUD();
     controls = new Controls();
     checklist = new Checklist();
+    audio = new GameAudio();
+    course = new FlightCourse(scene);
+    const unlockAudio = () => audio.unlock();
+    window.addEventListener('pointerdown', unlockAudio, { once: true });
+    window.addEventListener('keydown', unlockAudio, { once: true });
     controls.bindUI({
       throttle: document.getElementById('throttle'),
       rudder: document.getElementById('rudder'),
@@ -235,6 +243,8 @@ function wireButtons() {
 function showHangar() {
   cleanupCraft();
   modes.clearActive();
+  course?.clear();
+  audio?.hush();
   gameMode = 'menu';
   el.menu.classList.remove('hidden');
   el.crash.classList.add('hidden');
@@ -243,7 +253,9 @@ function showHangar() {
   showFlightUI(false);
   el.groundUi.classList.add('hidden');
   hud.hideChecklist();
+  hud.setMission('');
   checklist?.hide();
+  setupHangarAndHelp();
   camera.position.set(WORLD.hangar.x - 40, 25, WORLD.hangar.z - 60);
   camera.lookAt(WORLD.hangar.x, 8, WORLD.hangar.z);
 }
@@ -317,6 +329,8 @@ function startFlight(id) {
       ? 'Energy management — spoilers for path'
       : `Checklist: rotate ~${msToKt(spec.vr).toFixed(0)} kt`;
   hud.toast(`${label} — ${tip}`);
+  course?.layoutFor(spec);
+  hud.setMission(`TEST 0/${course.total} rings · land on runway`);
 }
 
 
@@ -449,12 +463,22 @@ function handleCrash(reason) {
   if (modes.mesh) {
     effects.explode(modes.pos.clone());
   }
+  audio?.crash();
+  audio?.hush();
+  const ringsHit = course?.hit || 0;
+  const result = scoreTest({
+    ringsHit,
+    ringsTotal: course?.total || 0,
+    landScore: null,
+    crashed: true
+  });
   gameMode = 'crash';
-  el.crashMsg.textContent = reason || 'Impact';
+  el.crashMsg.textContent = `${reason || 'Impact'} · rings ${ringsHit}/${course?.total || 0} · ${result.points}/100`;
   el.crash.classList.remove('hidden');
   showFlightUI(false);
   el.groundUi.classList.add('hidden');
   hud.hideChecklist();
+  hud.setMission('');
   checklist?.hide();
   hud.setMode('CRASH');
 }
@@ -480,10 +504,25 @@ function handleLanding(info) {
   if (checklistStatus && !checklistStatus.complete && (spec?.diff === 'hard' || spec?.diff === 'expert')) {
     msg += ' · checklist incomplete';
   }
+  const result = scoreTest({
+    ringsHit: course?.hit || 0,
+    ringsTotal: course?.total || 0,
+    landScore: info.score,
+    crashed: false
+  });
+  if (spec) saveBest(spec.id, result);
+  const medal = MEDAL[result.medal]?.label || result.grade;
+  msg += ` · TEST ${result.rings}/${result.ringsTotal} rings · ${result.points}/100 ${medal}`;
+  if (result.medal === 'gold' || result.medal === 'silver') audio?.medal();
+  else audio?.land((info.vert || 2) < 2);
+  audio?.hush();
   el.landMsg.textContent = msg;
+  const medalEl = document.getElementById('land-medal');
+  if (medalEl) medalEl.textContent = medal === '—' ? '' : medal;
   el.landed.classList.remove('hidden');
   gameMode = 'landed';
   showFlightUI(false);
+  hud.setMission('');
   checklist?.hide();
   hud.setMode('LAND');
 }
@@ -672,6 +711,16 @@ function loop() {
     const ev = flight.update(dt, th, water);
     syncMesh();
     updateHudConfig();
+    if (course) {
+      const gained = course.update(flight.position);
+      if (gained) {
+        audio?.ring();
+        hud.setMission(`TEST ${course.hit}/${course.total} rings`);
+        hud.toast(`Ring ${course.hit}/${course.total}`);
+      }
+      course.pulse(ringPulse);
+    }
+    audio?.setFlight(flight.throttle || flight.collective || 0, flight.getSpeed(), flight.stalling, flight.onGround);
 
     // Contrails at speed / altitude
     const spd = flight.getSpeed();

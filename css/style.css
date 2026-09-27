@@ -1461,3 +1461,38 @@ button, input {
     radial-gradient(ellipse 90% 70% at 50% 100%, rgba(68, 170, 102, 0.42), transparent 65%),
     linear-gradient(180deg, rgba(30,50,35,0.3), transparent);
 }
+
+.mission-banner {
+  position: absolute;
+  left: 50%;
+  top: calc(86px + var(--safe-t));
+  transform: translateX(-50%);
+  background: rgba(6, 18, 12, 0.82);
+  border: 1px solid rgba(61, 214, 140, 0.45);
+  color: #d8ffe8;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 6px 14px;
+  border-radius: 999px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.medal-line {
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: var(--accent2);
+  margin: 0 0 8px;
+}
+.ac-medal {
+  margin: 4px 0 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+.ac-medal.dim { color: var(--muted); font-weight: 500; }
+.medal-bronze { color: #d08a4a; }
+.medal-silver { color: #d0d8e8; }
+.medal-gold { color: #ffd24a; }
+
