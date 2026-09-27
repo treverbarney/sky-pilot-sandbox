@@ -66,6 +66,10 @@ export class FlightModel {
     this._passedStableGate = false;
     this._windX = 2.5 + Math.random() * 1.5; // ~3–6 kt crosswind from +X
     this._dutchPhase = 0;
+    this._engineN1 = 0;
+    this._cmdRoll = 0;
+    this._cmdPitch = 0;
+    this._cmdYaw = 0;
     this._tmp = new THREE.Vector3();
     this._fwd = new THREE.Vector3();
     this._up = new THREE.Vector3();
@@ -127,6 +131,10 @@ export class FlightModel {
     this._passedStableGate = false;
     this._windX = 2.5 + Math.random() * 1.5;
     this._dutchPhase = 0;
+    this._engineN1 = 0;
+    this._cmdRoll = 0;
+    this._cmdPitch = 0;
+    this._cmdYaw = 0;
   }
 
   setAttitudeInputs(aileron, elevator, rudder) {
@@ -259,9 +267,16 @@ export class FlightModel {
     }
     const yawCmd = this.rudder * s.yawRate * (this.onGround ? yawMul : 1);
 
-    this.euler.z += rollCmd * dt;
-    this.euler.x += pitchCmd * dt;
-    this.euler.y += yawCmd * dt;
+    // Control lag: airliner / cargo wash out stick; Extra / F-15 snap
+    const lag = Math.max(0.02, s.controlLag ?? (s.mass > 40000 ? 0.4 : 0.08));
+    const lagK = Math.min(1, dt / lag);
+    this._cmdRoll += (rollCmd - this._cmdRoll) * lagK;
+    this._cmdPitch += (pitchCmd - this._cmdPitch) * lagK;
+    this._cmdYaw += (yawCmd - this._cmdYaw) * lagK;
+
+    this.euler.z += this._cmdRoll * dt;
+    this.euler.x += this._cmdPitch * dt;
+    this.euler.y += this._cmdYaw * dt;
 
     // Dutch-roll / wing-rock in crosswind when banked (C182 touchy)
     const windSense = s.windSense ?? 0.5;
@@ -946,6 +961,23 @@ export class FlightModel {
   _updateFixedWing(dt, speed, agl, rho, mass) {
     const s = this.spec;
     let thrustMag = s.idleThrust + (s.maxThrust - s.idleThrust) * this.throttle;
+    // Engine spool — jets lag the lever; props almost instant
+    const spoolSec = s.engineSpool ?? (
+      s.type === 'jet' || s.id === 'airliner' || s.id === 'privatejet' ? 3.4
+        : s.type === 'fighter' || s.type === 'experimental' ? 1.1
+          : s.isHeli ? 1.6
+            : 0.35
+    );
+    if (spoolSec > 0.05 && !this.reverse) {
+      const n1Target = THREE.MathUtils.clamp(this.throttle, 0, 1);
+      const spoolK = Math.min(1, dt / spoolSec);
+      // Spool-up slower than spool-down for big fans
+      const k = n1Target > this._engineN1 ? spoolK * (s.id === 'airliner' || s.id === 'cargo' ? 0.72 : 1) : Math.min(1, spoolK * 1.6);
+      this._engineN1 += (n1Target - this._engineN1) * k;
+      thrustMag = s.idleThrust + (s.maxThrust - s.idleThrust) * this._engineN1;
+    } else {
+      this._engineN1 = this.throttle;
+    }
     // Per-type takeoff accel: C182 short roll, airliner long
     if (this.onGround) {
       const scale = s.takeoffAccelScale ?? 1;
@@ -962,7 +994,8 @@ export class FlightModel {
     if (s.hasAfterburner && this.afterburner) {
       if (this.throttle > abMin) {
         const ab = s.abThrust || s.maxThrust * 1.8;
-        thrustMag = s.idleThrust + (ab - s.idleThrust) * this.throttle;
+        const n1 = this._engineN1 || this.throttle;
+        thrustMag = s.idleThrust + (ab - s.idleThrust) * n1;
       } else {
         this.afterburner = false; // under gate — mil only
       }
@@ -1047,12 +1080,13 @@ export class FlightModel {
         Cl *= 1 + peak * ge;
       }
 
-      // Early-lift block: heavy jets cannot leap before ~0.95 Vr
+      // Early-lift block: heavy jets cannot leap before ~0.98 Vr
       if (this.onGround && (s.earlyLiftBlock || s.id === 'airliner')) {
         const vr = s.vr || 70;
-        if (speed < vr * 0.95) {
-          const t = speed / (vr * 0.95);
-          Cl *= Math.max(0.12, t * t);
+        const gate = s.id === 'airliner' ? 0.98 : 0.95;
+        if (speed < vr * gate) {
+          const t = speed / (vr * gate);
+          Cl *= Math.max(s.id === 'airliner' ? 0.06 : 0.12, t * t);
         }
       }
 

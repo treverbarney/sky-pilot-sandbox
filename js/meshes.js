@@ -10,11 +10,36 @@ function addBox(parent, w, h, d, material, x = 0, y = 0, z = 0, rx = 0, ry = 0, 
 }
 
 function addCyl(parent, rTop, rBot, h, segs, material, x, y, z, rx = 0, ry = 0, rz = 0) {
-  const m = new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBot, h, segs), material);
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBot, h, Math.max(12, segs || 16)), material);
   m.position.set(x, y, z);
   m.rotation.set(rx, ry, rz);
   parent.add(m);
   return m;
+}
+
+function addSphere(parent, r, segs, material, x = 0, y = 0, z = 0, sx = 1, sy = 1, sz = 1) {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(r, Math.max(10, segs), Math.max(8, segs - 2)), material);
+  m.position.set(x, y, z);
+  m.scale.set(sx, sy, sz);
+  parent.add(m);
+  return m;
+}
+
+/** Smooth cartoon fuselage: tapered tube + round nose/tail. */
+function addFuselage(parent, radius, length, material, y = 0.4) {
+  addCyl(parent, radius * 0.86, radius, length * 0.72, 16, material, 0, y, 0, Math.PI / 2, 0, 0);
+  addSphere(parent, radius * 0.92, 14, material, 0, y, length * 0.38, 0.92, 0.86, 1.15);
+  addSphere(parent, radius * 0.78, 12, material, 0, y, -length * 0.38, 0.85, 0.78, 1.05);
+}
+
+function addWing(parent, span, thick, chord, material, y, z, dihedral = 0) {
+  const w = addBox(parent, span, thick, chord, material, 0, y, z, 0, 0, 0);
+  addSphere(parent, Math.max(thick * 1.6, 0.12), 10, material, span * 0.48, y, z, 1.1, 0.7, chord * 0.35);
+  addSphere(parent, Math.max(thick * 1.6, 0.12), 10, material, -span * 0.48, y, z, 1.1, 0.7, chord * 0.35);
+  if (dihedral) {
+    w.rotation.z = 0;
+  }
+  return w;
 }
 
 function gearSet(g, positions, matOleo, matWheel) {
@@ -123,11 +148,12 @@ function kitCessna182(g, kit) {
   const gearMetal = kit.oleo || metal;
   const gearTire = kit.tire || dark;
   // Fuselage + cowling bulge
-  addCyl(g, 0.38, 0.48, 4.2, 10, body, 0, 0.4, 0, Math.PI / 2, 0, 0);
-  addCyl(g, 0.52, 0.42, 0.85, 10, body, 0, 0.38, 2.35, Math.PI / 2, 0, 0);
+  addFuselage(g, 0.48, 4.4, body, 0.4);
+  addCyl(g, 0.52, 0.42, 0.85, 16, body, 0, 0.38, 2.35, Math.PI / 2, 0, 0);
+  addSphere(g, 0.42, 12, metal, 0, 0.38, 2.7, 1.05, 0.9, 0.7);
   addBox(g, 0.95, 0.55, 0.7, metal, 0, 0.35, 2.55);
   // High wing + struts
-  addBox(g, 8.2, 0.14, 1.45, body, 0, 1.15, 0.2);
+  addWing(g, 8.2, 0.14, 1.45, body, 1.15, 0.2);
   addFlapHint(g, 5.5, 0.32, dark, 1.12, -0.4);
   addBox(g, 0.14, 0.9, 0.14, dark, -1.35, 0.7, 0.15);
   addBox(g, 0.14, 0.9, 0.14, dark, 1.35, 0.7, 0.15);
@@ -139,6 +165,7 @@ function kitCessna182(g, kit) {
   addBox(g, 2.6, 0.1, 0.55, body, 0, 0.55, -1.95);
   addBox(g, 0.12, 1.35, 0.75, accent, 0, 1.15, -2.0);
   addBox(g, 0.7, 0.5, 1.15, glass, 0, 0.85, 0.85);
+  addSphere(g, 0.55, 12, glass, 0, 0.92, 0.95, 1.15, 0.72, 0.9);
   // Cabin side windows — thicker readable strip
   addBox(g, 0.06, 0.32, 1.35, glass, 0.5, 0.72, 0.15);
   addBox(g, 0.06, 0.32, 1.35, glass, -0.5, 0.72, 0.15);
@@ -158,13 +185,13 @@ function kitPrivateJet(g, kit) {
   const gearMetal = kit.oleo || metal;
   const gearTire = kit.tire || dark;
   const len = 6.0;
-  addCyl(g, 0.42, 0.52, len, 10, body, 0, 0.4, 0, Math.PI / 2, 0, 0);
-  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.42, 1.4, 10), body);
-  nose.rotation.x = -Math.PI / 2;
-  nose.position.set(0, 0.4, len / 2 + 0.15);
+  addFuselage(g, 0.5, len, body, 0.4);
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.42, 14, 10), body);
+  nose.scale.set(0.95, 0.82, 1.35);
+  nose.position.set(0, 0.4, len / 2 + 0.05);
   g.add(nose);
   // Low wing
-  addBox(g, 9.0, 0.12, 1.7, body, 0, 0.18, -0.15);
+  addWing(g, 9.0, 0.12, 1.7, body, 0.18, -0.15);
   addFlapHint(g, 6.2, 0.32, dark, 0.14, -0.85);
   // T-tail
   addBox(g, 0.14, 1.85, 1.05, accent, 0, 1.35, -2.65);
@@ -197,14 +224,15 @@ function kitAirliner(g, kit) {
   const gearMetal = kit.oleo || metal;
   const gearTire = kit.tire || dark;
   const len = 11.5;
-  addCyl(g, 0.78, 0.88, len, 12, body, 0, 0.55, 0, Math.PI / 2, 0, 0);
-  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.78, 2.4, 12), body);
-  nose.rotation.x = -Math.PI / 2;
-  nose.position.set(0, 0.55, len / 2 + 0.5);
+  addFuselage(g, 0.86, len, body, 0.55);
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.78, 16, 12), body);
+  nose.scale.set(0.95, 0.88, 1.45);
+  nose.position.set(0, 0.55, len / 2 + 0.15);
   g.add(nose);
   // Cockpit windows
   addBox(g, 0.9, 0.35, 0.55, glass, 0, 0.95, len / 2 - 0.2);
-  addBox(g, 17.5, 0.16, 2.6, body, 0, 0.2, -0.6);
+  addSphere(g, 0.42, 12, glass, 0, 0.98, len / 2 - 0.05, 1.4, 0.55, 0.7);
+  addWing(g, 17.5, 0.16, 2.6, body, 0.2, -0.6);
   addFlapHint(g, 13, 0.42, dark, 0.16, -1.55);
   addBox(g, 0.12, 1.2, 0.75, accent, -8.6, 0.85, -0.9);
   addBox(g, 0.12, 1.2, 0.75, accent, 8.6, 0.85, -0.9);
@@ -247,13 +275,13 @@ function kitF15(g, kit) {
   const gearMetal = kit.oleo || metal;
   const gearTire = kit.tire || dark;
   const len = 6.4;
-  addCyl(g, 0.32, 0.52, len * 0.82, 10, body, 0, 0.12, 0.1, Math.PI / 2, 0, 0);
-  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.32, 1.7, 10), body);
-  nose.rotation.x = -Math.PI / 2;
+  addFuselage(g, 0.42, len * 0.9, body, 0.12);
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.32, 14, 10), body);
+  nose.scale.set(0.85, 0.7, 1.7);
   nose.position.set(0, 0.12, len / 2 - 0.15);
   g.add(nose);
   // Wing + LERX
-  addBox(g, 8.4, 0.11, 2.1, body, 0, 0.02, -0.35);
+  addWing(g, 8.4, 0.11, 2.1, body, 0.02, -0.35);
   addBox(g, 3.4, 0.08, 1.3, body, -2.9, 0.04, 0.45, 0, 0.4, 0);
   addBox(g, 3.4, 0.08, 1.3, body, 2.9, 0.04, 0.45, 0, -0.4, 0);
   addFlapHint(g, 5.8, 0.36, dark, -0.01, -1.15);
@@ -629,22 +657,20 @@ export function createParachuteMesh() {
   const g = new THREE.Group();
   const canopy = new THREE.Group();
   canopy.name = 'canopy';
-  const cellW = 0.85;
-  const colors = [0xff4422, 0xffffff, 0xff4422, 0x2266cc, 0xffffff, 0xff4422, 0x2266cc];
+  const cellColors = [0xff4422, 0xffffff, 0xff4422, 0x2266cc, 0xffffff, 0xff4422, 0x2266cc];
+  const dome = new THREE.Mesh(
+    new THREE.SphereGeometry(3.05, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.52),
+    makeToonPbr({ color: 0xff5533, roughness: 0.82, metalness: 0.02, side: THREE.DoubleSide, envMapIntensity: 0.25 })
+  );
+  dome.position.y = 3.35;
+  canopy.add(dome);
   for (let i = 0; i < 7; i++) {
-    const cell = new THREE.Mesh(
-      new THREE.BoxGeometry(cellW * 0.95, 0.4, 2.9),
-      makeToonPbr({
-        color: colors[i % colors.length],
-        roughness: 0.85,
-        metalness: 0.02,
-        envMapIntensity: 0.2
-      })
+    const stripe = new THREE.Mesh(
+      new THREE.SphereGeometry(3.08, 10, 8, (i / 7) * Math.PI * 2, Math.PI * 0.16, 0, Math.PI * 0.5),
+      makeToonPbr({ color: cellColors[i], roughness: 0.85, metalness: 0.02, side: THREE.DoubleSide })
     );
-    cell.position.set((i - 3) * cellW, 4.2, 0);
-    cell.position.y += Math.cos((i - 3) * 0.35) * 0.28;
-    cell.rotation.z = (i - 3) * -0.06;
-    canopy.add(cell);
+    stripe.position.y = 3.35;
+    canopy.add(stripe);
   }
   const top = new THREE.Mesh(
     new THREE.BoxGeometry(6.2, 0.1, 3.0),

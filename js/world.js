@@ -463,30 +463,46 @@ export function createWorld(scene, opts = {}) {
     opacity: 0.55
   });
   const buildingCount = qualityKey === 'low' ? 28 : qualityKey === 'high' ? 48 : 36;
+  const roofColors = [0xff7a3a, 0xffd24a, 0x3db8ff, 0xff5a7a, 0x7adf6a];
   for (let i = 0; i < buildingCount; i++) {
-    const w = 10 + Math.random() * 22;
-    const d = 10 + Math.random() * 22;
-    const h = 18 + Math.random() * 85;
-    const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), facadeMat[i % 4]);
+    const w = 10 + Math.random() * 18;
+    const d = 10 + Math.random() * 18;
+    const h = 16 + Math.random() * 72;
     const bx = (Math.random() - 0.5) * 380;
     const bz = (Math.random() - 0.5) * 380;
-    b.position.set(WORLD.city.x + bx, h / 2, WORLD.city.z + bz);
-    city.add(b);
-    if (i % 3 === 0) {
-      const win = new THREE.Mesh(new THREE.BoxGeometry(w * 0.7, h * 0.5, 0.3), winMat);
-      win.position.set(WORLD.city.x + bx, h * 0.45, WORLD.city.z + bz + d / 2 + 0.1);
-      city.add(win);
-    }
-    // Accent roof
-    if (i % 4 === 0) {
-      const roofTile = new THREE.Mesh(
-        new THREE.BoxGeometry(w + 1, 0.6, d + 1),
+    const cartoon = i % 3 !== 0;
+    if (cartoon) {
+      const r = Math.min(w, d) * 0.42;
+      const tower = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 1.08, h, 12), facadeMat[i % 4]);
+      tower.position.set(WORLD.city.x + bx, h / 2, WORLD.city.z + bz);
+      city.add(tower);
+      const cap = new THREE.Mesh(
+        new THREE.SphereGeometry(r * 1.05, 12, 8),
         useStd
-          ? makeToonPbr({ color: 0x3a4555, roughness: 0.5, metalness: 0.35 })
-          : makeFarLambert(0x3a4555)
+          ? makeToonPbr({ color: roofColors[i % roofColors.length], roughness: 0.45, metalness: 0.08 })
+          : makeFarLambert(roofColors[i % roofColors.length])
       );
-      roofTile.position.set(WORLD.city.x + bx, h + 0.3, WORLD.city.z + bz);
-      city.add(roofTile);
+      cap.position.set(WORLD.city.x + bx, h + r * 0.15, WORLD.city.z + bz);
+      cap.scale.set(1, 0.55, 1);
+      city.add(cap);
+    } else {
+      const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), facadeMat[i % 4]);
+      b.position.set(WORLD.city.x + bx, h / 2, WORLD.city.z + bz);
+      city.add(b);
+      const cap = new THREE.Mesh(
+        new THREE.SphereGeometry(Math.min(w, d) * 0.35, 10, 8),
+        useStd
+          ? makeToonPbr({ color: roofColors[i % roofColors.length], roughness: 0.5, metalness: 0.1 })
+          : makeFarLambert(roofColors[i % roofColors.length])
+      );
+      cap.position.set(WORLD.city.x + bx, h + 1.2, WORLD.city.z + bz);
+      cap.scale.set(w / 8, 0.45, d / 8);
+      city.add(cap);
+    }
+    if (i % 3 === 0) {
+      const win = new THREE.Mesh(new THREE.BoxGeometry(w * 0.45, h * 0.42, 0.28), winMat);
+      win.position.set(WORLD.city.x + bx, h * 0.45, WORLD.city.z + bz + Math.min(w, d) * 0.45);
+      city.add(win);
     }
   }
   root.add(city);
@@ -656,10 +672,10 @@ export function createWorld(scene, opts = {}) {
   // Trees — InstancedMesh trunks + crowns (draw-call friendly)
   {
     const treeCount = qualityKey === 'low' ? 40 : qualityKey === 'high' ? 90 : 64;
-    const trunkGeo = new THREE.CylinderGeometry(0.35, 0.55, 1, 5);
-    const leafGeo = new THREE.ConeGeometry(2.2, 5, 6);
+    const trunkGeo = new THREE.CylinderGeometry(0.35, 0.55, 1, 8);
+    const leafGeo = new THREE.SphereGeometry(2.15, 10, 8);
     const trunkM = makeFarLambert(0x5a3a20);
-    const leafM = makeFarLambert(0x2d6b2a);
+    const leafM = makeToonPbr({ color: 0x3aaa3a, roughness: 0.85, metalness: 0.02 });
     const trunks = new THREE.InstancedMesh(trunkGeo, trunkM, treeCount);
     const leaves = new THREE.InstancedMesh(leafGeo, leafM, treeCount);
     const td = new THREE.Object3D();
@@ -674,9 +690,9 @@ export function createWorld(scene, opts = {}) {
       td.rotation.set(0, 0, 0);
       td.updateMatrix();
       trunks.setMatrixAt(i, td.matrix);
-      td.position.set(tx, th + 2.2, tz);
-      const s = 1 + ((i % 5) * 0.08);
-      td.scale.set(s, s, s);
+      td.position.set(tx, th + 1.6, tz);
+      const s = 1.15 + ((i % 5) * 0.12);
+      td.scale.set(s, s * 0.85, s);
       td.updateMatrix();
       leaves.setMatrixAt(i, td.matrix);
     }
@@ -689,8 +705,8 @@ export function createWorld(scene, opts = {}) {
   // Extra tree band along road (instanced)
   {
     const n = qualityKey === 'low' ? 12 : 24;
-    const trunkGeo = new THREE.CylinderGeometry(0.3, 0.45, 3.2, 5);
-    const leafGeo = new THREE.ConeGeometry(1.8, 4.2, 6);
+    const trunkGeo = new THREE.CylinderGeometry(0.3, 0.45, 3.2, 8);
+    const leafGeo = new THREE.SphereGeometry(1.7, 10, 8);
     const trunks = new THREE.InstancedMesh(trunkGeo, makeFarLambert(0x4a3018), n);
     const leaves = new THREE.InstancedMesh(leafGeo, makeFarLambert(0x3a7a32), n);
     const td = new THREE.Object3D();
@@ -702,7 +718,7 @@ export function createWorld(scene, opts = {}) {
       td.scale.set(1, 1, 1);
       td.updateMatrix();
       trunks.setMatrixAt(i, td.matrix);
-      td.position.set(x - 10, 4.2, z);
+      td.position.set(x - 10, 3.6, z);
       td.updateMatrix();
       leaves.setMatrixAt(i, td.matrix);
     }

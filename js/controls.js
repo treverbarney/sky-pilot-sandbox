@@ -67,6 +67,9 @@ export class Controls {
     this._baseBeta = 45;
     this._smoothA = 0;
     this._smoothE = 0;
+    this._stickA = 0;
+    this._stickE = 0;
+    this._stickActive = false;
     this._flapLabels = ['0', '1'];
     this._brakeLatched = false;
     this._page = 'PRIMARY';
@@ -188,6 +191,35 @@ export class Controls {
     if (e.beta != null) this._orient.beta = e.beta;
     if (e.gamma != null) this._orient.gamma = e.gamma;
   };
+
+  /** On-screen stick — works when tilt is off, and as a fine trim with tilt. */
+  bindStick(canvas) {
+    if (!canvas || this._stickBound) return;
+    this._stickBound = true;
+    const start = (ev) => {
+      if (ev.target.closest && ev.target.closest('#controls, button, input, .overlay, #hud-config, #checklist')) return;
+      if (ev.pointerType === 'mouse' && ev.button !== 0) return;
+      this._stickActive = true;
+      this._stickOrigin = { x: ev.clientX, y: ev.clientY };
+      canvas.setPointerCapture?.(ev.pointerId);
+    };
+    const move = (ev) => {
+      if (!this._stickActive || !this._stickOrigin) return;
+      const dx = (ev.clientX - this._stickOrigin.x) / 72;
+      const dy = (ev.clientY - this._stickOrigin.y) / 72;
+      this._stickA = clamp(dx, -1, 1);
+      this._stickE = clamp(dy, -1, 1);
+    };
+    const end = () => {
+      this._stickActive = false;
+      this._stickA = 0;
+      this._stickE = 0;
+    };
+    canvas.addEventListener('pointerdown', start);
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+  }
 
   bindUI(els) {
     this.els = els;
@@ -703,8 +735,12 @@ export class Controls {
     let a = 0, e = 0, r = this.rudder;
 
     if (this.motionEnabled) {
-      a = clamp(this._orient.gamma / 35, -1, 1);
-      e = clamp((this._orient.beta - this._baseBeta) / 30, -1, 1);
+      a = clamp(this._orient.gamma / 32, -1, 1);
+      e = clamp((this._orient.beta - this._baseBeta) / 28, -1, 1);
+    }
+    if (this._stickActive) {
+      a += this._stickA;
+      e += this._stickE;
     }
 
     if (this.keys['ArrowLeft'] || this.keys['KeyA']) a -= 1;
@@ -734,8 +770,22 @@ export class Controls {
     e = clamp(e, -1, 1);
     r = clamp(r, -1, 1);
 
-    this._smoothA += (a - this._smoothA) * 0.25;
-    this._smoothE += (e - this._smoothE) * 0.25;
+    const expoAmt = this.spec?.inputExpo ?? 1.45;
+    const gain = this.spec?.tiltGain ?? 1;
+    const dead = 0.07;
+    const shaped = (v) => {
+      const s = Math.sign(v);
+      const mag = Math.abs(v);
+      if (mag < dead) return 0;
+      const t = (mag - dead) / (1 - dead);
+      return s * Math.pow(t, expoAmt) * gain;
+    };
+    a = shaped(a);
+    e = shaped(e);
+
+    const smooth = this.spec?.id === 'airliner' || this.spec?.id === 'cargo' ? 0.12 : 0.18;
+    this._smoothA += (a - this._smoothA) * smooth;
+    this._smoothE += (e - this._smoothE) * smooth;
     this.aileron = this._smoothA;
     this.elevator = this._smoothE;
     this.rudder = r;

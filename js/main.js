@@ -135,6 +135,7 @@ async function bootGraphics() {
       camera: document.getElementById('btn-camera'),
       eject: document.getElementById('btn-eject')
     });
+    controls.bindStick(canvas);
     setLoad(0.88);
     wireButtons();
     setLoad(1);
