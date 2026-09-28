@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { weather } from './weather.js';
 
 const G = 9.81;
 const RHO0 = 1.225;
@@ -157,6 +158,15 @@ export class FlightModel {
   }
 
   getSpeed() { return this.velocity.length(); }
+  getGroundSpeed() { return Math.hypot(this.velocity.x, this.velocity.z); }
+  getAirspeed() {
+    const ax = this.velocity.x - (weather.x || 0);
+    const az = this.velocity.z - (weather.z || 0);
+    return Math.hypot(ax, this.velocity.y, az);
+  }
+  getAirHoriz() {
+    return Math.hypot(this.velocity.x - (weather.x || 0), this.velocity.z - (weather.z || 0));
+  }
   getAltitude() { return this.position.y; }
   getVerticalSpeed() { return this.velocity.y; }
 
@@ -305,14 +315,19 @@ export class FlightModel {
     this._up.set(0, 1, 0).applyQuaternion(this.quaternion);
     this._right.set(1, 0, 0).applyQuaternion(this.quaternion);
 
-    const speed = this.velocity.length();
+    const speedGs = this.velocity.length();
+    const airX = this.velocity.x - (weather.x || 0);
+    const airZ = this.velocity.z - (weather.z || 0);
+    const airY = this.velocity.y;
+    const speed = Math.hypot(airX, airY, airZ);
+    this._airSpeed = speed;
     const agl = this.position.y - terrainHeight;
     this._updateApproachPhase(agl, dt);
     this._updateTakeoffGates();
     this._updateGoAround(dt, agl);
 
     // Nosewheel: align ground-track with heading when rolling
-    if (this.onGround && !s.isHeli && speed > 2 && Math.abs(this.rudder) > 0.02) {
+    if (this.onGround && !s.isHeli && speedGs > 2 && Math.abs(this.rudder) > 0.02) {
       const hdg = this.euler.y;
       const desired = new THREE.Vector3(Math.sin(hdg), 0, Math.cos(hdg));
       const horiz = new THREE.Vector3(this.velocity.x, 0, this.velocity.z);
@@ -356,20 +371,26 @@ export class FlightModel {
     this._tmp.copy(this._force).multiplyScalar(dt / mass);
     this.velocity.add(this._tmp);
 
-    // Crosswind (+X) + weathervane; light planes tippy on roll
+    // Crosswind weathervane from live weather (do not add wind as extra accel — aero uses airspeed)
     {
-      const wx = this._windX || 2.5;
-      const ws = s.windSense ?? 0.5;
+      const wx = weather.x || 0;
+      const wz = weather.z || 0;
+      const cross = wx * Math.cos(this.euler.y) - wz * Math.sin(this.euler.y);
+      const ws = (s.windSense ?? 0.5) * (1 + (weather.turb || 0) * 0.6);
       if (!this.onGround && !s.isHeli) {
-        const blend = Math.min(1, 0.4 * ws * dt);
-        this.velocity.x += wx * blend * 0.12;
+        this.euler.z += cross * ws * 0.012 * dt;
+        this.euler.y += cross * ws * 0.006 * dt;
+        if (weather.turb > 0.2) {
+          this.euler.z += Math.sin(performance.now() * 0.004 + this._dutchPhase) * weather.turb * 0.25 * dt;
+          this.euler.x += Math.cos(performance.now() * 0.003) * weather.turb * 0.12 * dt;
+        }
       }
       if (this.onGround && !s.isHeli && spdNow > 3) {
         const wv = s.weathervane ?? 0.5;
         const lightBoost = (s.mass < 2500 || s.type === 'glider' || s.snappy) ? 1.3 : 1.0;
-        this.euler.y += wx * wv * 0.014 * lightBoost * dt * Math.min(1, spdNow / 18);
+        this.euler.y += cross * wv * 0.018 * lightBoost * dt * Math.min(1, spdNow / 18);
         if ((s.id === 'cessna182' || (s.diff === 'easy' && s.type === 'prop') || s.snappy) && spdNow > 12) {
-          this.euler.z += Math.sign(wx || 1) * ws * 0.09 * dt * Math.min(1, (spdNow - 12) / 22);
+          this.euler.z += Math.sign(cross || 1) * ws * 0.09 * dt * Math.min(1, (spdNow - 12) / 22);
           if (Math.abs(this.euler.z) > 0.9 && spdNow > 16) {
             this.euler.z *= 0.4;
             this.velocity.x *= 0.55;
@@ -863,8 +884,7 @@ export class FlightModel {
       const vref = s.vref || s.stallSpeed * 1.3;
       const appMin = s.approachSpeedMin ?? vref * 0.85;
       const appMax = s.approachSpeedMax ?? vref * 1.2;
-      const spd = this.getSpeed();
-      const bankOk = Math.abs(this.euler.z) < 0.26;
+      const spd = this.getAirHoriz();
       let hdg = Math.abs(((this.euler.y % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2));
       if (hdg > Math.PI) hdg = Math.PI * 2 - hdg;
       if (hdg > Math.PI / 2) hdg = Math.PI - hdg;
@@ -918,7 +938,7 @@ export class FlightModel {
       this.rotateReady = false;
       return;
     }
-    const spd = this.getSpeed();
+    const spd = this.getAirHoriz();
     const vr = s.vr || 30;
     // Strict band — airliner must not cue rotate at 40 kt
     const inVrBand = spd >= vr * 0.98 && spd <= vr * 1.22;
@@ -1028,9 +1048,14 @@ export class FlightModel {
 
     this._force.addScaledVector(this._fwd, thrustMag);
 
-    // Aerodynamics
-    if (speed > 0.5) {
-      const velDir = this._tmp.copy(this.velocity).normalize();
+    const airX = this.velocity.x - (weather.x || 0);
+    const airY = this.velocity.y;
+    const airZ = this.velocity.z - (weather.z || 0);
+    const airSpd = Math.hypot(airX, airY, airZ);
+
+    // Aerodynamics vs air mass (IAS, not groundspeed)
+    if (airSpd > 0.5) {
+      const velDir = this._tmp.set(airX, airY, airZ).normalize();
       // AoA: angle between forward and velocity projected
       const fwdDot = THREE.MathUtils.clamp(this._fwd.dot(velDir), -1, 1);
       let aoa = Math.acos(fwdDot);

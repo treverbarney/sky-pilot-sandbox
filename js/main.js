@@ -3,6 +3,7 @@ import { AIRCRAFT, getAircraft, msToKt } from './aircraft-data.js';
 import { FlightModel } from './flight-model.js';
 import { createAircraftMesh } from './meshes.js';
 import { createWorld, WORLD, sampleHeight, STARS } from './world.js';
+import { weather, updateWeather, applyWind, setStorm, setStormAuto, weatherLabel, STORM } from './weather.js';
 import { Controls } from './controls.js';
 import { ModeManager } from './modes.js';
 import { Effects } from './effects.js';
@@ -223,50 +224,76 @@ function wireButtons() {
     controls.recenter();
     hud.toast('Tilt recentered');
   });
-  document.getElementById('btn-eject').addEventListener('click', () => tryEject());
-  document.getElementById('btn-retry').addEventListener('click', () => {
+  document.getElementById('btn-weather')?.addEventListener('click', () => {
+    document.getElementById('weather-sheet')?.classList.toggle('hidden');
+    syncWeatherUi();
+  });
+  document.getElementById('btn-wx-fly')?.addEventListener('click', () => {
+    document.getElementById('weather-sheet')?.classList.toggle('hidden');
+    syncWeatherUi();
+  });
+  document.getElementById('wx-close')?.addEventListener('click', () => {
+    document.getElementById('weather-sheet')?.classList.add('hidden');
+  });
+  document.getElementById('wx-dir')?.addEventListener('input', (e) => {
+    applyWind(Number(e.target.value), weather.speedKt);
+    syncWeatherUi();
+  });
+  document.getElementById('wx-kt')?.addEventListener('input', (e) => {
+    applyWind(weather.fromDeg, Number(e.target.value));
+    weather.stormAuto = false;
+    syncWeatherUi();
+  });
+  document.querySelectorAll('[data-storm]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const lv = Number(btn.dataset.storm);
+      setStorm(lv);
+      syncWeatherUi();
+      hud?.toast?.(STORM[lv]?.label || 'Clear');
+    });
+  });
+  document.getElementById('wx-auto')?.addEventListener('click', () => {
+    setStormAuto(!weather.stormAuto);
+    if (weather.stormAuto && weather.storm === 0) setStorm(1);
+    syncWeatherUi();
+    hud?.toast?.(weather.stormAuto ? 'Storm live — wind will shift' : 'Storm hold');
+  });
+  document.getElementById('btn-eject')?.addEventListener('click', () => tryEject());
+  document.getElementById('btn-retry')?.addEventListener('click', () => {
     if (currentSpec) startFlight(currentSpec.id);
   });
-  document.getElementById('btn-hangar').addEventListener('click', () => showHangar());
-  document.getElementById('btn-respawn').addEventListener('click', () => teleportAirport());
-  document.getElementById('btn-land-again').addEventListener('click', () => {
+  document.getElementById('btn-hangar')?.addEventListener('click', () => showHangar());
+  document.getElementById('btn-respawn')?.addEventListener('click', () => teleportAirport());
+  document.getElementById('btn-land-again')?.addEventListener('click', () => {
     if (currentSpec) startFlight(currentSpec.id);
   });
-  document.getElementById('btn-land-hangar').addEventListener('click', () => showHangar());
-  document.getElementById('btn-land-explore').addEventListener('click', () => {
+  document.getElementById('btn-land-hangar')?.addEventListener('click', () => showHangar());
+  document.getElementById('btn-land-explore')?.addEventListener('click', () => {
     el.landed.classList.add('hidden');
     gameMode = 'flight';
     showFlightUI(true);
     if (currentSpec) checklist.setAircraft(currentSpec);
     hud.toast('Free explore — JUMP anytime');
   });
-  document.getElementById('btn-swoop').addEventListener('pointerdown', () => {
+  document.getElementById('btn-swoop')?.addEventListener('pointerdown', () => {
     modes.swoop = true;
     document.getElementById('btn-swoop').classList.add('on');
   });
-  document.getElementById('btn-swoop').addEventListener('pointerup', () => {
+  document.getElementById('btn-swoop')?.addEventListener('pointerup', () => {
     modes.swoop = false;
     document.getElementById('btn-swoop').classList.remove('on');
   });
-  document.getElementById('btn-swoop').addEventListener('pointercancel', () => {
-    modes.swoop = false;
-    document.getElementById('btn-swoop').classList.remove('on');
-  });
-  document.getElementById('btn-dive').addEventListener('pointerdown', () => {
+  document.getElementById('btn-dive')?.addEventListener('pointerdown', () => {
     modes.dive = true;
     document.getElementById('btn-dive').classList.add('on');
   });
-  document.getElementById('btn-dive').addEventListener('pointerup', () => {
+  document.getElementById('btn-dive')?.addEventListener('pointerup', () => {
     modes.dive = false;
     document.getElementById('btn-dive').classList.remove('on');
   });
-  document.getElementById('btn-dive').addEventListener('pointercancel', () => {
-    modes.dive = false;
-    document.getElementById('btn-dive').classList.remove('on');
-  });
-  document.getElementById('btn-bike').addEventListener('click', () => spawnVehicle('bike'));
-  document.getElementById('btn-car').addEventListener('click', () => spawnVehicle('car'));
-  document.getElementById('btn-teleport').addEventListener('click', () => teleportAirport());
+  document.getElementById('btn-bike')?.addEventListener('click', () => spawnVehicle('bike'));
+  document.getElementById('btn-car')?.addEventListener('click', () => spawnVehicle('car'));
+  document.getElementById('btn-teleport')?.addEventListener('click', () => teleportAirport());
   document.getElementById('btn-mute')?.addEventListener('click', () => {
     const on = audio?.toggleMute?.();
     document.getElementById('btn-mute').textContent = on ? 'Sound off' : 'Sound on';
@@ -286,6 +313,19 @@ function wireButtons() {
     if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
       if (gameMode !== 'menu') setPaused(!paused);
     }
+  });
+}
+
+function syncWeatherUi() {
+  const dir = document.getElementById('wx-dir');
+  const kt = document.getElementById('wx-kt');
+  const lab = document.getElementById('wx-readout');
+  if (dir) dir.value = String(Math.round(weather.fromDeg) % 360 || 360);
+  if (kt) kt.value = String(Math.round(weather.speedKt));
+  if (lab) lab.textContent = weatherLabel();
+  document.getElementById('wx-auto')?.classList.toggle('on', weather.stormAuto);
+  document.querySelectorAll('[data-storm]').forEach((b) => {
+    b.classList.toggle('on', Number(b.dataset.storm) === weather.storm);
   });
 }
 
@@ -588,6 +628,11 @@ function handleLanding(info) {
   });
   if (spec) saveBest(spec.id, result);
   const atpFail = !!(info.standardFail || info.score?.fail || result.medal === 'none');
+  const pad = world?.nearestPad?.(pos.x, pos.z);
+  if (pad?.later) {
+    hud.toast(`Landed ${pad.name}`, 3);
+    showStandard(`FIELD: ${pad.name.toUpperCase()} · ${atpFail ? 'ATP fail, still down' : 'nice arrival'}`, atpFail);
+  }
   const medal = MEDAL[result.medal]?.label || result.grade;
   const sink = info.vert != null ? `${info.vert.toFixed(1)} m/s sink` : '';
   const issues = info.score?.issues?.length ? info.score.issues.join(', ') : '';
@@ -728,6 +773,10 @@ function loop() {
   controls.update();
   effects.update(dt);
   world?.update?.(dt);
+  updateWeather(dt);
+  if (world?.setDusk && weather.storm >= 2 && !duskOn) {
+    scene.fog = new THREE.FogExp2(0x6a7aa0, STORM[weather.storm].fog);
+  }
   // FPS governor → auto Low
   _fpsAcc += dt; _fpsFrames++;
   if (_fpsAcc >= 1) {
@@ -911,12 +960,14 @@ function loop() {
     updateCamera(dt, flight.position, flight.quaternion, flight.getSpeed());
     hud.update(dt, {
       alt: flight.getAltitude(),
-      speed: flight.getSpeed(),
+      speed: flight.getAirspeed ? flight.getAirspeed() : flight.getSpeed(),
+      gs: flight.getGroundSpeed ? flight.getGroundSpeed() : flight.getSpeed(),
       vs: flight.getVerticalSpeed(),
       x: flight.position.x,
       z: flight.position.z,
       heading: flight.euler.y,
-      nav: `APT ${Math.round(Math.hypot(flight.position.x - WORLD.hangar.x, flight.position.z - WORLD.hangar.z))} m`
+      nav: `APT ${Math.round(Math.hypot(flight.position.x - WORLD.hangar.x, flight.position.z - WORLD.hangar.z))} m`,
+      wx: weatherLabel()
     });
   }
 

@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="css/style.css?v=10" />
+  <link rel="stylesheet" href="css/style.css?v=11" />
   <title>Sky Pilot Sandbox</title>
   <!-- Vite resolves three from node_modules; for plain python -m http.server use the CDN importmap in README -->
 </head>
@@ -24,6 +24,7 @@
       <div class="hud-top">
         <div class="gauge" id="gauge-alt"><span id="alt">0</span><small>ALT ft</small></div>
         <div class="gauge" id="gauge-spd"><span id="spd">0</span><small>KIAS</small></div>
+        <div class="gauge" id="gauge-gs"><span id="gs">0 GS</span><small>GS kt</small></div>
         <div class="gauge" id="gauge-vs"><span id="vs">0</span><small>fpm</small></div>
         <div class="gauge ac-name"><span id="ac-label">—</span><small id="mode-label">AIR</small></div>
       </div>
@@ -32,7 +33,7 @@
       <div id="flare-cue" class="flare-cue hidden">FLARE · IDLE</div>
       <div id="approach-cue" class="approach-cue hidden"></div>
       <div id="mission-banner" class="mission-banner hidden"></div>
-      <div id="standard-banner" class="standard-banner hidden"></div>
+      <div id="wx-chip" class="wx-chip">6 kt from 360</div>
       <div class="minimap-label">MAP</div>
       <canvas id="minimap" width="140" height="140" aria-label="Minimap"></canvas>
       <div id="toast" class="toast hidden"></div>
@@ -97,6 +98,7 @@
             <button type="button" id="btn-ballast" class="ctrl-btn hidden">BALLAST</button>
             <button type="button" id="btn-camera" class="ctrl-btn">CAM</button>
             <button type="button" id="btn-pause" class="ctrl-btn">II</button>
+            <button type="button" id="btn-wx-fly" class="ctrl-btn">WX</button>
             <button type="button" id="btn-eject" class="ctrl-btn danger">JUMP</button>
             <button type="button" id="btn-help-flight" class="ctrl-btn">?</button>
           </div>
@@ -131,6 +133,7 @@
           <button id="btn-quality" type="button" class="btn btn-ghost" title="Graphics quality">GFX Med</button>
           <button id="btn-dusk" type="button" class="btn btn-ghost" title="Day / dusk">Day</button>
           <button id="btn-mute" type="button" class="btn btn-ghost" title="Mute">Sound on</button>
+          <button id="btn-weather" type="button" class="btn btn-ghost" title="Weather">Weather</button>
           <button id="btn-help" type="button" class="btn btn-ghost" title="Help">Help</button>
         </div>
         <p id="status-msg" class="status">Sandbox — fly anything. ATP banners show checkride standards; they do not end the flight.</p>
@@ -140,7 +143,7 @@
         </div>
         <div id="aircraft-grid" class="aircraft-grid"></div>
         <p class="hint">Tilt phone · PRI/SYS panels · WASD/QE · [ ] flaps · G gear · X spoilers · O arm · V AB · T TV · B brake · H reverse · 1 TOGA · M smoke</p>
-        <p class="hint dim">All 10 aircraft fly now. Medals are licenses, not locks. Hold DIVE / SWOOP on the chute. Drag the canvas if tilt is off. Smash-only crashes; everything else you keep flying.</p>
+        <p class="hint dim">Yellow rings on the map are later fields (lake beach, city lot, north shelf, meadows). Weather sets wind FROM + storm 1–3. IAS vs GS. Smash-only crashes.</p>
       </div>
     </div>
 
@@ -191,6 +194,26 @@
       </div>
     </div>
 
+    <div id="weather-sheet" class="overlay hidden">
+      <div class="panel">
+        <h2>Weather</h2>
+        <p id="wx-readout">6 kt from 360</p>
+        <label>Wind from (deg)</label>
+        <input id="wx-dir" type="range" min="10" max="360" step="10" value="360" />
+        <label>Wind speed (kt)</label>
+        <input id="wx-kt" type="range" min="0" max="55" step="1" value="6" />
+        <div class="menu-actions">
+          <button type="button" class="btn btn-ghost" data-storm="0">Clear</button>
+          <button type="button" class="btn btn-ghost" data-storm="1">Storm 1</button>
+          <button type="button" class="btn btn-ghost" data-storm="2">Storm 2</button>
+          <button type="button" class="btn btn-ghost" data-storm="3">Storm 3</button>
+        </div>
+        <button type="button" id="wx-auto" class="btn btn-secondary">Live storm (shifts)</button>
+        <p class="hint dim">Headwind shortens the takeoff. Tailwind and Storm 3 shove the chute. IAS is what the wing feels; GS is across the ground.</p>
+        <button type="button" id="wx-close" class="btn btn-primary">Done</button>
+      </div>
+    </div>
+
     <div id="loading" class="overlay">
       <div class="panel">
         <h2>Loading world…</h2>
@@ -198,6 +221,6 @@
       </div>
     </div>
   </div>
-  <script type="module" src="js/main.js?v=10"></script>
+  <script type="module" src="js/main.js?v=11"></script>
 </body>
 </html>

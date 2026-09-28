@@ -47,6 +47,16 @@ export const STARS = [
   { id: 'star-field', x: 280, y: 35, z: 220 }
 ];
 
+/** Later-game landing spots — fly there when you want a new target. */
+export const LANDING_PADS = [
+  { id: 'home', name: 'Home runway', x: 0, z: 0, r: 45, later: false },
+  { id: 'lake-beach', name: 'Lake beach', x: 420, z: -520, r: 30, later: true },
+  { id: 'city-lot', name: 'City lot', x: -500, z: 400, r: 24, later: true },
+  { id: 'north-shelf', name: 'North shelf', x: -180, z: 980, r: 28, later: true },
+  { id: 'west-meadow', name: 'West meadow', x: -720, z: -620, r: 32, later: true },
+  { id: 'east-field', name: 'East field', x: 860, z: 180, r: 30, later: true }
+];
+
 function groundColor(x, z) {
   const dx = x - WORLD.lake.x, dz = z - WORLD.lake.z;
   if (dx * dx + dz * dz < WORLD.lake.r * WORLD.lake.r) return null;
@@ -947,6 +957,24 @@ export function createWorld(scene, opts = {}) {
   flock.position.set(180, 70, 120);
   root.add(flock);
 
+  LANDING_PADS.filter((p) => p.later).forEach((p) => {
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(p.r * 0.55, p.r, 28),
+      new THREE.MeshBasicMaterial({ color: 0xffc14a, side: THREE.DoubleSide, transparent: true, opacity: 0.7 })
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(p.x, sampleHeight(p.x, p.z) + 0.6, p.z);
+    ring.name = 'landpad';
+    root.add(ring);
+    const dot = new THREE.Mesh(
+      new THREE.CircleGeometry(4.2, 16),
+      new THREE.MeshBasicMaterial({ color: 0xffef8a, transparent: true, opacity: 0.55, side: THREE.DoubleSide })
+    );
+    dot.rotation.x = -Math.PI / 2;
+    dot.position.set(p.x, sampleHeight(p.x, p.z) + 0.62, p.z);
+    root.add(dot);
+  });
+
   scene.add(root);
 
   const heightData = { geo, size: WORLD.size, segs };
@@ -971,6 +999,18 @@ export function createWorld(scene, opts = {}) {
     },
     nearRocket(x, z) {
       return Math.hypot(x - WORLD.rocketPad.x, z - WORLD.rocketPad.z) < 18;
+    },
+    nearestPad(x, z) {
+      let best = null;
+      let bestD = 1e9;
+      for (const p of LANDING_PADS) {
+        const d = Math.hypot(x - p.x, z - p.z);
+        if (d < p.r && d < bestD) {
+          best = p;
+          bestD = d;
+        }
+      }
+      return best;
     },
     setDusk(on) {
       scene.background = new THREE.Color(on ? 0x2a3a68 : 0x6ec8ff);

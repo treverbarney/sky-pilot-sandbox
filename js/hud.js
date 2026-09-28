@@ -1,4 +1,4 @@
-import { WORLD, LANDMARKS } from './world.js';
+import { WORLD, LANDMARKS, LANDING_PADS } from './world.js';
 import { getAircraftInfo } from './aircraft-info.js';
 
 const MS_TO_KT = 1.94384;
@@ -24,6 +24,8 @@ export class HUD {
     this._aircraftId = null;
     this.missionEl = document.getElementById('mission-banner');
     this.navEl = document.getElementById('nav-chip');
+    this.gsEl = document.getElementById('gs');
+    this.wxEl = document.getElementById('wx-chip');
   }
 
   setMission(text) {
@@ -113,13 +115,15 @@ export class HUD {
       if (this._toastT <= 0) this.toastEl.classList.add('hidden');
     }
     if (!state) return;
-    const { alt, speed, vs, x, z, heading } = state;
+    const { alt, speed, vs, x, z, heading, gs, wx } = state;
     const altFt = Math.round(alt * M_TO_FT);
     const kts = Math.round(speed * MS_TO_KT);
     const fpm = Math.round(vs * M_TO_FT * 60);
     this.alt.textContent = altFt;
     this.spd.textContent = kts;
     this.vs.textContent = fpm;
+    if (this.gsEl && gs != null) this.gsEl.textContent = `${Math.round(gs * MS_TO_KT)} GS`;
+    if (this.wxEl && wx) this.wxEl.textContent = wx;
 
     // Soft visual warnings
     this.gaugeAlt?.classList.toggle('warn-hi', altFt > 12000);
@@ -247,6 +251,15 @@ export class HUD {
       const [mx, mz] = wx(lm.x, lm.z);
       if (mx < 8 || mz < 8 || mx > W - 8 || mz > H - 8) continue;
       ctx.fillText(lm.name, mx, mz);
+    }
+    ctx.fillStyle = 'rgba(255, 193, 74, 0.95)';
+    for (const p of LANDING_PADS || []) {
+      if (!p.later) continue;
+      const [px, pz] = wx(p.x, p.z);
+      if (px < 6 || pz < 6 || px > W - 6 || pz > H - 6) continue;
+      ctx.beginPath();
+      ctx.arc(px, pz, 3, 0, Math.PI * 2);
+      ctx.fill();
     }
   }
 

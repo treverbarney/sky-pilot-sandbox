@@ -4,6 +4,7 @@ import {
   createBalloonMesh, createRocketMesh
 } from './meshes.js';
 import { sampleHeight, WORLD, WIND } from './world.js';
+import { weather } from './weather.js';
 
 /** Alternate play modes after eject / at pads */
 export class ModeManager {
@@ -113,6 +114,7 @@ export class ModeManager {
     const steer = controls.aileron;
     const pitch = controls.elevator;
     this.heading += steer * 1.6 * dt;
+    if (weather.turb > 0.2) this.heading += Math.sin(performance.now() * 0.003) * weather.turb * 0.4 * dt;
     const fwd = new THREE.Vector3(Math.sin(this.heading), 0, Math.cos(this.heading));
     const ground = world.getHeight(this.pos.x, this.pos.z);
     const agl = this.pos.y - ground;
@@ -141,8 +143,8 @@ export class ModeManager {
       horiz = 32;
     }
 
-    const windX = (WIND?.x || 0);
-    const windZ = (WIND?.z || 0);
+    const windX = (WIND?.x || weather.x || 0) * (1 + (weather.storm || 0) * 0.35);
+    const windZ = (WIND?.z || weather.z || 0) * (1 + (weather.storm || 0) * 0.35);
     this.vel.x = fwd.x * horiz + pitch * fwd.x * -5 + windX;
     this.vel.z = fwd.z * horiz + pitch * fwd.z * -5 + windZ;
     const lift = flare && agl < 50 ? 7 : 0;
