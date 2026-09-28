@@ -1,27 +1,34 @@
 import * as THREE from 'three';
 import {
   createParachuteMesh, createMotorcycleMesh, createSupercarMesh,
-  createBalloonMesh, createRocketMesh
+  createBalloonMesh, createRocketMesh, createDinoMesh, createAircraftMesh
 } from './meshes.js';
 import { sampleHeight, WORLD, WIND } from './world.js';
 import { weather } from './weather.js';
+import { AIRCRAFT } from './aircraft-data.js';
 
 /** Alternate play modes after eject / at pads */
 export class ModeManager {
   constructor(scene) {
     this.scene = scene;
-    this.mode = 'none'; // none | parachute | bike | car | balloon | rocket
+    this.mode = 'none'; // none | parachute | bike | car | balloon | rocket | walk
     this.mesh = null;
     this.pos = new THREE.Vector3();
     this.vel = new THREE.Vector3();
     this.heading = 0;
     this.swoop = false;
     this.dive = false;
-    this.rocketPhase = 'pad'; // pad | ascent | space | reentry | land
+    this.rocketPhase = 'pad';
     this.rocketThrottle = 0;
     this.alive = true;
     this._balloon = null;
     this._rocket = null;
+    this._dino = null;
+    this._ramp = null;
+    this._parkedBike = null;
+    this._parkedCar = null;
+    this.nearCraft = null;
+    this.walkSpeed = 0;
     this.spawnAirportExtras();
   }
 
@@ -32,12 +39,30 @@ export class ModeManager {
     this._rocket = createRocketMesh();
     this._rocket.position.set(WORLD.rocketPad.x, 0, WORLD.rocketPad.z);
     this.scene.add(this._rocket);
+    this._dino = createDinoMesh();
+    this._dino.visible = false;
+    this.scene.add(this._dino);
+    this._ramp = new THREE.Group();
+    this._ramp.name = 'rampLine';
+    AIRCRAFT.forEach((a, i) => {
+      const m = createAircraftMesh(a);
+      m.scale.setScalar(0.82);
+      m.position.set(WORLD.hangar.x + 18 + (i % 5) * 22, 1.2, WORLD.hangar.z + 36 + Math.floor(i / 5) * 26);
+      m.rotation.y = Math.PI * 0.15;
+      m.userData.acId = a.id;
+      m.userData.acName = a.name;
+      this._ramp.add(m);
+    });
+    this.scene.add(this._ramp);
   }
 
   clearActive() {
-    if (this.mesh && this.mesh !== this._balloon && this.mesh !== this._rocket) {
-      this.scene.remove(this.mesh);
+    if (this.mesh && this.mesh !== this._balloon && this.mesh !== this._rocket && this.mesh !== this._dino) {
+      if (this.mesh !== this._parkedBike && this.mesh !== this._parkedCar) {
+        this.scene.remove(this.mesh);
+      }
     }
+    if (this._dino) this._dino.visible = false;
     if (this.mode === 'balloon' && this._balloon) {
       this._balloon.position.set(WORLD.balloonPad.x, 0, WORLD.balloonPad.z);
     }
@@ -69,14 +94,83 @@ export class ModeManager {
 
   startVehicle(kind, fromPos) {
     this.clearActive();
-    this.mode = kind; // bike | car
-    this.mesh = kind === 'bike' ? createMotorcycleMesh() : createSupercarMesh();
+    this.mode = kind;
+    if (kind === 'bike') {
+      if (!this._parkedBike) {
+        this._parkedBike = createMotorcycleMesh();
+        this.scene.add(this._parkedBike);
+      }
+      this.mesh = this._parkedBike;
+    } else {
+      if (!this._parkedCar) {
+        this._parkedCar = createSupercarMesh();
+        this.scene.add(this._parkedCar);
+      }
+      this.mesh = this._parkedCar;
+    }
+    this.mesh.visible = true;
     const h = sampleHeight(fromPos.x, fromPos.z);
     this.pos.set(fromPos.x, h + 0.5, fromPos.z);
     this.vel.set(0, 0, 0);
-    this.heading = 0;
+    this.heading = this.heading || 0;
     this.mesh.position.copy(this.pos);
-    this.scene.add(this.mesh);
+  }
+
+  startWalk(fromPos, heading = 0) {
+    const keepBike = this.mode === 'bike' ? this.mesh : this._parkedBike;
+    const keepCar = this.mode === 'car' ? this.mesh : this._parkedCar;
+    if (this.mode === 'bike' && keepBike) {
+      this._parkedBike = keepBike;
+      keepBike.position.copy(this.pos);
+      keepBike.visible = true;
+    }
+    if (this.mode === 'car' && keepCar) {
+      this._parkedCar = keepCar;
+      keepCar.position.copy(this.pos);
+      keepCar.visible = true;
+    }
+    if (this.mesh && this.mesh !== this._dino && this.mesh !== this._parkedBike && this.mesh !== this._parkedCar && this.mesh !== this._balloon && this.mesh !== this._rocket) {
+      this.scene.remove(this.mesh);
+    }
+    this.mode = 'walk';
+    this.mesh = this._dino;
+    this._dino.visible = true;
+    const h = sampleHeight(fromPos.x, fromPos.z);
+    this.pos.set(fromPos.x, h + 0.15, fromPos.z);
+    this.vel.set(0, 0, 0);
+    this.heading = heading;
+    this.walkSpeed = 0;
+    this.mesh.position.copy(this.pos);
+  }
+
+  nearestBoardable() {
+    let best = null;
+    let bestD = 14;
+    if (this._ramp) {
+      this._ramp.children.forEach((m) => {
+        const d = Math.hypot(this.pos.x - m.position.x, this.pos.z - m.position.z);
+        if (d < bestD) {
+          bestD = d;
+          best = { kind: 'plane', id: m.userData.acId, name: m.userData.acName, dist: d };
+        }
+      });
+    }
+    if (this._parkedBike && this._parkedBike.visible && this.mode === 'walk') {
+      const d = Math.hypot(this.pos.x - this._parkedBike.position.x, this.pos.z - this._parkedBike.position.z);
+      if (d < 6 && d < bestD) best = { kind: 'bike', id: 'bike', name: 'Motorcycle', dist: d };
+    }
+    if (this._parkedCar && this._parkedCar.visible && this.mode === 'walk') {
+      const d = Math.hypot(this.pos.x - this._parkedCar.position.x, this.pos.z - this._parkedCar.position.z);
+      if (d < 7 && d < (best?.dist ?? 14)) best = { kind: 'car', id: 'car', name: 'Supercar', dist: d };
+    }
+    if (Math.hypot(this.pos.x - WORLD.balloonPad.x, this.pos.z - WORLD.balloonPad.z) < 12) {
+      best = { kind: 'balloon', id: 'balloon', name: 'Balloon', dist: 0 };
+    }
+    if (Math.hypot(this.pos.x - WORLD.rocketPad.x, this.pos.z - WORLD.rocketPad.z) < 12) {
+      best = { kind: 'rocket', id: 'rocket', name: 'Rocket', dist: 0 };
+    }
+    this.nearCraft = best;
+    return best;
   }
 
   startBalloon() {
@@ -105,6 +199,7 @@ export class ModeManager {
 
     if (this.mode === 'parachute') return this._updateChute(dt, controls, world);
     if (this.mode === 'bike' || this.mode === 'car') return this._updateVehicle(dt, controls, world);
+    if (this.mode === 'walk') return this._updateWalk(dt, controls, world);
     if (this.mode === 'balloon') return this._updateBalloon(dt, controls, world);
     if (this.mode === 'rocket') return this._updateRocket(dt, controls, world);
     return null;
@@ -387,6 +482,35 @@ export class ModeManager {
       return null;
     }
     return null;
+  }
+
+  _updateWalk(dt, controls, world) {
+    const turn = controls.aileron + controls.rudder * 0.4;
+    this.heading += turn * 2.1 * dt;
+    const wish = Math.max(0, -controls.elevator) * 7.2 + (controls.throttle > 0.15 ? controls.throttle * 6.5 : 0);
+    const back = Math.max(0, controls.elevator) * 3.2;
+    const target = wish - back;
+    this.walkSpeed += (target - this.walkSpeed) * Math.min(1, 8 * dt);
+    const fwd = new THREE.Vector3(Math.sin(this.heading), 0, Math.cos(this.heading));
+    this.pos.x += fwd.x * this.walkSpeed * dt;
+    this.pos.z += fwd.z * this.walkSpeed * dt;
+    const ground = world.getHeight(this.pos.x, this.pos.z);
+    this.pos.y = ground + 0.12;
+    this.vel.set(fwd.x * this.walkSpeed, 0, fwd.z * this.walkSpeed);
+    this.mesh.position.copy(this.pos);
+    this.mesh.rotation.y = this.heading;
+    const t = performance.now() * 0.001;
+    const swing = Math.sin(t * 9) * Math.min(1, Math.abs(this.walkSpeed) / 4) * 0.7;
+    const l = this.mesh.getObjectByName('dinoLegL');
+    const r = this.mesh.getObjectByName('dinoLegR');
+    const tail = this.mesh.getObjectByName('dinoTail');
+    const head = this.mesh.getObjectByName('dinoHead');
+    if (l) l.rotation.x = swing;
+    if (r) r.rotation.x = -swing;
+    if (tail) tail.rotation.y = Math.sin(t * 3) * 0.25;
+    if (head) head.rotation.x = Math.sin(t * 2) * 0.04;
+    const near = this.nearestBoardable();
+    return { event: 'walk_state', speed: this.walkSpeed, near };
   }
 
   getSpeed() {

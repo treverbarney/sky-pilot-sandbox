@@ -53,6 +53,7 @@ let paused = false;
 let duskOn = false;
 let _airportToast = false;
 let pathPip = null;
+let _walkHint = false;
 
 const el = {
   menu: document.getElementById('menu'),
@@ -293,6 +294,11 @@ function wireButtons() {
   });
   document.getElementById('btn-bike')?.addEventListener('click', () => spawnVehicle('bike'));
   document.getElementById('btn-car')?.addEventListener('click', () => spawnVehicle('car'));
+  document.getElementById('btn-exit-veh')?.addEventListener('click', () => exitVehicle());
+  document.getElementById('btn-board')?.addEventListener('click', () => boardNearest());
+  document.getElementById('btn-walk-ramp')?.addEventListener('click', () => {
+    beginWalk(new THREE.Vector3(WORLD.hangar.x + 20, 2, WORLD.hangar.z + 20));
+  });
   document.getElementById('btn-teleport')?.addEventListener('click', () => teleportAirport());
   document.getElementById('btn-mute')?.addEventListener('click', () => {
     const on = audio?.toggleMute?.();
@@ -312,6 +318,11 @@ function wireButtons() {
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
       if (gameMode !== 'menu') setPaused(!paused);
+    }
+    if (e.code === 'KeyE') {
+      if (gameMode === 'walk') boardNearest();
+      else if (gameMode === 'vehicle') exitVehicle();
+      else if (gameMode === 'flight' && flight?.onGround && flight.getSpeed() < 8) exitToWalk();
     }
   });
 }
@@ -369,15 +380,23 @@ function cleanupCraft() {
   flight = null;
 }
 
-function startFlight(id) {
+function startFlight(id, opts = {}) {
   const spec = getAircraft(id);
   currentSpec = spec;
   cleanupCraft();
-  modes.clearActive();
+  const walkPos = modes.pos.clone();
+  const walkHdg = modes.heading || 0;
+  if (modes.mode === 'walk' && modes._dino) modes._dino.visible = false;
+  modes.mode = 'none';
+  modes.mesh = null;
 
   flight = new FlightModel(spec);
   const spawn = new THREE.Vector3(-8, 2, -WORLD.runway.halfL + 30);
-  if (spec.type === 'glider') {
+  if (opts.fromPos) {
+    spawn.copy(opts.fromPos);
+    spawn.y = (world?.getHeight?.(spawn.x, spawn.z) ?? 0) + 2;
+    flight.reset(spawn, opts.heading ?? walkHdg, 0);
+  } else if (spec.type === 'glider') {
     spawn.set(0, 400, -200);
     flight.reset(spawn, 0, 40);
     flight.onGround = false;
@@ -426,8 +445,8 @@ function startFlight(id) {
     ? 'Raise COLL to hover'
     : spec.type === 'glider'
       ? 'Energy management — spoilers for path'
-      : `Checklist: rotate ~${msToKt(spec.vr).toFixed(0)} kt`;
-  hud.toast(`${label} — ${tip} · sandbox: fly anywhere`);
+      : `Taxi anywhere — rotate ~${msToKt(spec.vr).toFixed(0)} kt`;
+  hud.toast(`${label} — ${tip} · sandbox: take off from here`);
   const kind = testKindFor(spec);
   course?.layoutFor(spec, kind);
   hud.setMission(`${kind.toUpperCase()} 0/${course.total} rings`);
@@ -479,8 +498,11 @@ function tryEject() {
     return;
   }
   if (flight.getAltitude() < 30 && flight.onGround) {
-    tryBoardSpecial();
-    return;
+    if (tryBoardSpecial()) return;
+    if (flight.getSpeed() < 8) {
+      exitToWalk();
+      return;
+    }
   }
   const pos = flight.position.clone();
   const vel = flight.velocity.clone();
@@ -525,16 +547,72 @@ function tryBoardSpecial() {
 }
 
 function onChuteLand(pos) {
-  hud.toast('On ground — grab a vehicle or teleport');
-  document.getElementById('btn-bike').classList.remove('hidden');
-  document.getElementById('btn-car').classList.remove('hidden');
-  document.getElementById('btn-swoop').classList.add('hidden');
-  document.getElementById('btn-dive').classList.add('hidden');
   const landPos = pos.clone();
   modes.clearActive();
-  modes.pos.copy(landPos);
-  gameMode = 'ground';
-  hud.setMode('GROUND');
+  beginWalk(landPos);
+  hud.toast('Dino on the ground — walk, board a plane, or grab a ride');
+}
+
+function beginWalk(fromPos) {
+  modes.startWalk(fromPos || modes.pos, modes.heading || 0);
+  gameMode = 'walk';
+  hud.setMode('DINO');
+  hud.setAircraft('Dino Pilot');
+  showFlightUI(false);
+  el.menu.classList.add('hidden');
+  el.crash.classList.add('hidden');
+  el.groundUi.classList.remove('hidden');
+  document.getElementById('btn-swoop').classList.add('hidden');
+  document.getElementById('btn-dive').classList.add('hidden');
+  document.getElementById('btn-bike').classList.remove('hidden');
+  document.getElementById('btn-car').classList.remove('hidden');
+  document.getElementById('btn-exit-veh')?.classList.add('hidden');
+  document.getElementById('btn-board')?.classList.remove('hidden');
+}
+
+function exitToWalk() {
+  const p = flight ? flight.position.clone() : modes.pos.clone();
+  const hdg = flight ? flight.euler.y : modes.heading;
+  cleanupCraft();
+  beginWalk(p);
+  modes.heading = hdg;
+  hud.toast('Out of the aircraft — walk the ramp');
+}
+
+function exitVehicle() {
+  if (gameMode !== 'vehicle' && modes.mode !== 'bike' && modes.mode !== 'car') return;
+  const p = modes.pos.clone();
+  p.x += Math.sin(modes.heading + 1.2) * 3;
+  p.z += Math.cos(modes.heading + 1.2) * 3;
+  beginWalk(p);
+  hud.toast('Dismounted');
+}
+
+function boardNearest() {
+  const n = modes.nearestBoardable();
+  if (!n) {
+    hud.toast('Walk closer to a parked plane, bike, or car');
+    return;
+  }
+  if (n.kind === 'plane') {
+    startFlight(n.id, { fromPos: modes.pos.clone(), heading: modes.heading });
+    return;
+  }
+  if (n.kind === 'bike' || n.kind === 'car') {
+    spawnVehicle(n.kind);
+    return;
+  }
+  if (n.kind === 'balloon') {
+    modes.startBalloon();
+    gameMode = 'balloon';
+    hud.setMode('BALLOON');
+    return;
+  }
+  if (n.kind === 'rocket') {
+    modes.startRocket();
+    gameMode = 'rocket';
+    hud.setMode('ROCKET');
+  }
 }
 
 function spawnVehicle(kind) {
@@ -546,7 +624,11 @@ function spawnVehicle(kind) {
   el.groundUi.classList.remove('hidden');
   document.getElementById('btn-swoop').classList.add('hidden');
   document.getElementById('btn-dive').classList.add('hidden');
-  hud.toast(`${kind === 'bike' ? 'Bike — lean it, easy high-side' : 'Car — planted, understeers at speed'} · hit stuff and you wreck`);
+  hud.toast(`${kind === 'bike' ? 'Bike — lean it, easy high-side' : 'Car — planted, understeers at speed'} · E or EXIT to hop off`);
+  document.getElementById('btn-exit-veh')?.classList.remove('hidden');
+  document.getElementById('btn-board')?.classList.add('hidden');
+  if (modes._dino) modes._dino.visible = false;
+}
 }
 
 function teleportAirport() {
@@ -980,10 +1062,21 @@ function loop() {
     });
   }
 
-  if (gameMode === 'chute' || gameMode === 'vehicle' || gameMode === 'balloon' || gameMode === 'rocket') {
+  if (gameMode === 'chute' || gameMode === 'vehicle' || gameMode === 'balloon' || gameMode === 'rocket' || gameMode === 'walk') {
     const ev = modes.update(dt, controls, world);
     if (ev?.event === 'chute_land') onChuteLand(ev.pos);
-    if (ev?.event === 'airport_arrive' && !_airportToast) {
+    if (ev?.event === 'walk_state') {
+      const n = ev.near;
+      const board = document.getElementById('btn-board');
+      if (board) {
+        board.textContent = n ? `BOARD ${n.name}` : 'BOARD';
+        board.classList.toggle('on', !!n);
+      }
+      if (n && !_walkHint) {
+        _walkHint = true;
+        hud.toast(`E / BOARD — ${n.name}`);
+      }
+    }
       _airportToast = true;
       hud.toast('Back at the airport — teleport or hangar');
     }

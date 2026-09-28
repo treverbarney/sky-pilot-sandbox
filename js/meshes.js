@@ -717,6 +717,49 @@ export function createParachuteMesh() {
   return g;
 }
 
+/** Sage-and-cream walkable pilot dino */
+export function createDinoMesh() {
+  const g = new THREE.Group();
+  g.name = 'dino';
+  const sage = makeToonPbr({ color: 0x88a494, roughness: 0.62, metalness: 0.04 });
+  const cream = makeToonPbr({ color: 0xecece8, roughness: 0.7, metalness: 0.02 });
+  const dark = makeFarLambert(0x2a2e32);
+  const body = addSphere(g, 0.42, 12, sage, 0, 0.95, 0, 1.05, 1.15, 1.25);
+  body.name = 'dinoBody';
+  addSphere(g, 0.28, 10, cream, 0, 0.82, 0.22, 1.1, 1.0, 1.15);
+  const head = addSphere(g, 0.32, 12, sage, 0, 1.48, 0.28, 1.05, 0.95, 1.15);
+  head.name = 'dinoHead';
+  addSphere(g, 0.16, 8, cream, 0, 1.38, 0.48, 1.2, 0.7, 1.1);
+  addSphere(g, 0.06, 6, dark, 0.12, 1.55, 0.48);
+  addSphere(g, 0.06, 6, dark, -0.12, 1.55, 0.48);
+  addSphere(g, 0.035, 6, makeFarLambert(0xffffff), 0.14, 1.57, 0.52);
+  addSphere(g, 0.035, 6, makeFarLambert(0xffffff), -0.14, 1.57, 0.52);
+  const tail = new THREE.Group();
+  tail.name = 'dinoTail';
+  addCyl(tail, 0.06, 0.16, 0.95, 8, sage, 0, 0, -0.55, Math.PI / 2);
+  tail.position.set(0, 0.9, -0.35);
+  g.add(tail);
+  const legL = new THREE.Group();
+  legL.name = 'dinoLegL';
+  addCyl(legL, 0.08, 0.11, 0.55, 8, sage, 0, -0.2, 0);
+  addSphere(legL, 0.11, 8, cream, 0, -0.48, 0.08, 1.2, 0.6, 1.4);
+  legL.position.set(-0.18, 0.55, 0.05);
+  g.add(legL);
+  const legR = new THREE.Group();
+  legR.name = 'dinoLegR';
+  addCyl(legR, 0.08, 0.11, 0.55, 8, sage, 0, -0.2, 0);
+  addSphere(legR, 0.11, 8, cream, 0, -0.48, 0.08, 1.2, 0.6, 1.4);
+  legR.position.set(0.18, 0.55, 0.05);
+  g.add(legR);
+  const armL = addCyl(g, 0.05, 0.07, 0.38, 6, sage, -0.38, 1.05, 0.12, 0.4, 0, 0.5);
+  armL.name = 'dinoArmL';
+  const armR = addCyl(g, 0.05, 0.07, 0.38, 6, sage, 0.38, 1.05, 0.12, 0.4, 0, -0.5);
+  armR.name = 'dinoArmR';
+  addBox(g, 0.08, 0.1, 0.08, sage, 0, 1.78, 0.12);
+  addBox(g, 0.06, 0.08, 0.06, sage, 0.08, 1.72, -0.05);
+  return g;
+}
+
 export function createMotorcycleMesh() {
   const g = new THREE.Group();
   const red = makeToonPbr({ color: 0xff2a22, roughness: 0.38, metalness: 0.42, envMapIntensity: 0.45 });

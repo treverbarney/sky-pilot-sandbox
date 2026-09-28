@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="css/style.css?v=14" />
+  <link rel="stylesheet" href="css/style.css?v=15" />
   <title>Sky Pilot Sandbox</title>
   <!-- Vite resolves three from node_modules; for plain python -m http.server use the CDN importmap in README -->
 </head>
@@ -117,6 +117,8 @@
       <button type="button" id="btn-dive" class="ctrl-btn">DIVE</button>
       <button type="button" id="btn-bike" class="ctrl-btn">🏍 BIKE</button>
       <button type="button" id="btn-car" class="ctrl-btn">🏎 CAR</button>
+      <button type="button" id="btn-exit-veh" class="ctrl-btn hidden">EXIT</button>
+      <button type="button" id="btn-board" class="ctrl-btn">BOARD</button>
       <button type="button" id="btn-teleport" class="ctrl-btn">✈ AIRPORT</button>
     </div>
 
@@ -140,7 +142,7 @@
         <p id="status-msg" class="status">Sandbox — fly anything. ATP banners show checkride standards; they do not end the flight.</p>
         <div class="menu-actions">
           <button id="btn-motion" type="button" class="btn btn-secondary">Enable motion</button>
-          <button id="btn-recenter" type="button" class="btn btn-ghost">Recenter tilt</button>
+          <button id="btn-walk-ramp" type="button" class="btn btn-primary">Walk the ramp</button>
         </div>
         <div id="aircraft-grid" class="aircraft-grid"></div>
         <p class="hint">Tilt phone · PRI/SYS panels · WASD/QE · [ ] flaps · G gear · X spoilers · O arm · V AB · T TV · B brake · H reverse · 1 TOGA · M smoke</p>
@@ -222,6 +224,6 @@
       </div>
     </div>
   </div>
-  <script type="module" src="js/main.js?v=14"></script>
+  <script type="module" src="js/main.js?v=15"></script>
 </body>
 </html>
