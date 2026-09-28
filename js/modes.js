@@ -220,18 +220,25 @@ export class ModeManager {
   }
 
   _updateBalloon(dt, controls, world) {
-    // Vertical via throttle (burner); horizontal mild wind + tilt steer
     const burn = controls.throttle;
-    this.vel.y += (burn * 8 - 2.5) * dt; // buoyancy vs sink
-    this.vel.y *= 0.99;
-    this.vel.x += controls.aileron * 4 * dt;
-    this.vel.z += controls.elevator * 4 * dt;
-    this.vel.x *= 0.98;
-    this.vel.z *= 0.98;
-    // Ambient wind
-    this.vel.x += 0.4 * dt;
+    // Envelope heat lags the burner
+    this._heat = (this._heat ?? 0.35) + (burn - (this._heat ?? 0.35)) * Math.min(1, dt / 1.6);
+    const lift = this._heat * 11 - 3.1;
+    this.vel.y += lift * dt;
+    this.vel.y *= 0.985;
+    this.vel.x += controls.aileron * 2.2 * dt;
+    this.vel.z += controls.elevator * 2.2 * dt;
+    this.vel.x += (weather.x || 0) * 0.35 * dt;
+    this.vel.z += (weather.z || 0) * 0.35 * dt;
+    this.vel.x *= 0.975;
+    this.vel.z *= 0.975;
     this.pos.addScaledVector(this.vel, dt);
     const ground = world.getHeight(this.pos.x, this.pos.z);
+    const burner = this.mesh?.getObjectByName('burner');
+    if (burner) {
+      burner.visible = burn > 0.08;
+      burner.scale.setScalar(0.6 + burn * 1.4);
+    }
     if (this.pos.y < ground + 3) {
       this.pos.y = ground + 3;
       this.vel.y = Math.max(0, this.vel.y);
@@ -241,7 +248,8 @@ export class ModeManager {
     }
     if (this.pos.y > 2000) this.vel.y = Math.min(this.vel.y, 0);
     this.mesh.position.copy(this.pos);
-    return null;
+    this.mesh.rotation.y += dt * 0.15;
+    return { event: 'balloon_state', heat: this._heat };
   }
 
   _updateRocket(dt, controls, world) {
@@ -262,17 +270,19 @@ export class ModeManager {
     }
 
     if (this.rocketPhase === 'ascent') {
-      // Need high throttle to reach space (~80km); playable compressed to 25km
       const thrust = thr * 120;
       this.vel.y += (thrust - 9.81) * dt;
-      // Steer slightly
-      this.vel.x += controls.aileron * 8 * dt;
-      this.vel.z += controls.elevator * 8 * dt;
+      this.vel.x += controls.aileron * 10 * dt;
+      this.vel.z += controls.elevator * 10 * dt;
+      this.vel.x += (weather.x || 0) * 0.08 * dt;
+      this.vel.z += (weather.z || 0) * 0.08 * dt;
       this.pos.addScaledVector(this.vel, dt);
-      // Tilt visual
-      this.mesh.rotation.z = -controls.aileron * 0.2;
-      this.mesh.rotation.x = controls.elevator * 0.2;
+      this.mesh.rotation.z = -controls.aileron * 0.28;
+      this.mesh.rotation.x = controls.elevator * 0.28;
       this.mesh.position.copy(this.pos);
+      this.mesh.traverse((o) => {
+        if (o.name === 'gridfin') o.rotation.z = controls.aileron * 0.4;
+      });
       if (this.pos.y > 25000) {
         this.rocketPhase = 'space';
         this.vel.y = Math.min(this.vel.y, 50);

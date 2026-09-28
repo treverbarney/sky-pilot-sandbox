@@ -1,5 +1,5 @@
 /* Sky Pilot Sandbox — network-first app shell + CDN; cache fallback offline */
-const CACHE = 'sky-pilot-sandbox-v12';
+const CACHE = 'sky-pilot-sandbox-v13';
 const SHELL = [
   './',
   './index.html',
@@ -19,7 +19,11 @@ const SHELL = [
   './js/modes.js',
   './js/effects.js',
   './js/hud.js',
-  './js/materials.js'
+  './js/materials.js',
+  './js/craft-details.js',
+  './js/weather.js',
+  './js/career.js',
+  './js/audio.js'
 ];
 
 self.addEventListener('install', (e) => {

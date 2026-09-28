@@ -1,4 +1,6 @@
 /** Aircraft roster — research-backed physics, procedures & control sets (SI units) */
+import { HANDLING } from './craft-details.js';
+
 /** Speeds m/s, mass kg, thrust N, rates rad/s. See docs/aircraft-research.md & physics-targets.md */
 
 export const AIRCRAFT = [
@@ -1174,7 +1176,9 @@ controlLayout: {
 ];
 
 export function getAircraft(id) {
-  return AIRCRAFT.find((a) => a.id === id) || AIRCRAFT[0];
+  const base = AIRCRAFT.find((a) => a.id === id) || AIRCRAFT[0];
+  const extra = HANDLING[base.id];
+  return extra ? { ...base, ...extra } : base;
 }
 
 export function msToKt(ms) {

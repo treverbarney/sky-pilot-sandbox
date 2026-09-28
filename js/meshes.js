@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { aircraftKit, makeToonPbr, makeFarLambert, getQualityKey } from './materials.js';
+import { addCraftDetails } from './craft-details.js';
 
 function addBox(parent, w, h, d, material, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
@@ -640,6 +641,8 @@ export function createAircraftMesh(spec) {
       break;
   }
 
+  addCraftDetails(g, spec);
+
   g.scale.setScalar(scale);
   g.traverse((o) => {
     if (o.isMesh) {
@@ -762,25 +765,29 @@ export function createSupercarMesh() {
 
 export function createBalloonMesh() {
   const g = new THREE.Group();
-  const envelope = new THREE.Mesh(
-    new THREE.SphereGeometry(3.6, 16, 12),
-    makeToonPbr({ color: 0xff5533, roughness: 0.75, metalness: 0.05, envMapIntensity: 0.3 })
+  const gore = [0xff5533, 0xffe066, 0xffffff, 0x3a7ad8, 0xff5533, 0xffe066, 0xffffff, 0x3a7ad8];
+  for (let i = 0; i < 8; i++) {
+    const panel = new THREE.Mesh(
+      new THREE.SphereGeometry(3.62, 8, 12, (i / 8) * Math.PI * 2, Math.PI * 0.26),
+      makeToonPbr({ color: gore[i], roughness: 0.78, metalness: 0.04, side: THREE.DoubleSide })
+    );
+    panel.position.y = 8.2;
+    panel.scale.y = 1.18;
+    g.add(panel);
+  }
+  const skirt = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.6, 0.7, 1.8, 12, 1, true),
+    makeToonPbr({ color: 0xffeedd, roughness: 0.85, metalness: 0.02, side: THREE.DoubleSide })
   );
-  envelope.position.y = 8.2;
-  envelope.scale.y = 1.15;
-  g.add(envelope);
+  skirt.position.y = 4.7;
+  g.add(skirt);
   const band = new THREE.Mesh(
-    new THREE.SphereGeometry(3.65, 16, 12),
-    makeToonPbr({ color: 0xffe066, roughness: 0.7, metalness: 0.05 })
+    new THREE.TorusGeometry(3.3, 0.08, 6, 20),
+    makeFarLambert(0x222222)
   );
-  band.scale.set(1, 0.22, 1);
+  band.rotation.x = Math.PI / 2;
   band.position.y = 8.2;
   g.add(band);
-  const band2 = band.clone();
-  band2.material = makeToonPbr({ color: 0xffffff, roughness: 0.7 });
-  band2.position.y = 6.5;
-  band2.scale.set(0.85, 0.12, 0.85);
-  g.add(band2);
   const lineMat = new THREE.LineBasicMaterial({ color: 0xcc8844 });
   for (let i = 0; i < 8; i++) {
     const a = (i / 8) * Math.PI * 2;
@@ -788,14 +795,84 @@ export function createBalloonMesh() {
       new THREE.Line(
         new THREE.BufferGeometry().setFromPoints([
           new THREE.Vector3(Math.cos(a) * 2.2, 5.2, Math.sin(a) * 2.2),
-          new THREE.Vector3(Math.cos(a) * 0.6, 2.2, Math.sin(a) * 0.6)
+          new THREE.Vector3(Math.cos(a) * 0.55, 2.2, Math.sin(a) * 0.55)
         ]),
         lineMat
       )
     );
   }
-  addBox(g, 1.5, 1.25, 1.5, makeFarLambert(0x8a5a28), 0, 1.5, 0);
-  addBox(g, 1.55, 0.12, 1.55, makeFarLambert(0x6a4020), 0, 2.15, 0);
+  addBox(g, 1.55, 1.3, 1.55, makeFarLambert(0x8a5a28), 0, 1.5, 0);
+  addBox(g, 1.6, 0.12, 1.6, makeFarLambert(0x6a4020), 0, 2.18, 0);
+  addBox(g, 0.18, 0.45, 0.18, makeFarLambert(0x333333), 0.55, 1.2, 0.55);
+  addBox(g, 0.18, 0.45, 0.18, makeFarLambert(0x333333), -0.55, 1.2, 0.55);
+  const burner = new THREE.Mesh(
+    new THREE.ConeGeometry(0.28, 0.7, 8),
+    makeToonPbr({ color: 0xffaa33, emissive: 0xff6600, emissiveIntensity: 0.8, roughness: 0.5 })
+  );
+  burner.position.y = 2.7;
+  burner.name = 'burner';
+  g.add(burner);
+  const bag = makeFarLambert(0xc2a36a);
+  addBox(g, 0.28, 0.32, 0.28, bag, 0.7, 0.95, 0.55);
+  addBox(g, 0.28, 0.32, 0.28, bag, -0.7, 0.95, 0.55);
+  return g;
+}
+
+export function createRocketMesh() {
+  const g = new THREE.Group();
+  addCyl(g, 1.15, 1.35, 12, 14, makeToonPbr({ color: 0xf2f2f5, roughness: 0.32, metalness: 0.5 }), 0, 7, 0);
+  const nose = new THREE.Mesh(
+    new THREE.ConeGeometry(1.15, 3.2, 14),
+    makeToonPbr({ color: 0xff3333, roughness: 0.4, metalness: 0.2 })
+  );
+  nose.position.y = 14.6;
+  g.add(nose);
+  addCyl(g, 1.18, 1.18, 0.55, 14, makeToonPbr({ color: 0x2244aa, roughness: 0.45, metalness: 0.25 }), 0, 10, 0);
+  addCyl(g, 1.18, 1.18, 0.4, 14, makeToonPbr({ color: 0x2244aa, roughness: 0.45, metalness: 0.25 }), 0, 4.2, 0);
+  addBox(g, 0.35, 0.22, 0.08, makeFarLambert(0x88ccee), 0, 12.4, 1.12);
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2;
+    const fin = addBox(g, 0.12, 2.6, 1.9, makeToonPbr({ color: 0xff3333, roughness: 0.45, metalness: 0.15 }));
+    fin.position.set(Math.cos(a) * 1.25, 2.1, Math.sin(a) * 1.25);
+    fin.rotation.y = a;
+    const grid = addBox(g, 0.06, 0.9, 0.9, makeFarLambert(0x8899aa));
+    grid.position.set(Math.cos(a) * 1.4, 11.2, Math.sin(a) * 1.4);
+    grid.rotation.y = a;
+    grid.name = 'gridfin';
+  }
+  for (const [x, z] of [[0.45, 0], [-0.45, 0], [0, 0.45], [0, -0.45]]) {
+    addCyl(g, 0.22, 0.32, 0.7, 8, makeToonPbr({ color: 0x445566, metalness: 0.6, roughness: 0.35 }), x, 0.4, z);
+  }
+  const flame = new THREE.Mesh(
+    new THREE.ConeGeometry(1.05, 3.5, 8),
+    makeToonPbr({
+      color: 0xffaa22,
+      emissive: 0xff8800,
+      emissiveIntensity: 1.2,
+      roughness: 0.6,
+      metalness: 0
+    })
+  );
+  flame.rotation.x = Math.PI;
+  flame.position.y = -0.6;
+  flame.name = 'flame';
+  flame.visible = false;
+  g.add(flame);
+  const flame2 = new THREE.Mesh(
+    new THREE.ConeGeometry(0.55, 2.2, 6),
+    makeToonPbr({
+      color: 0xffeebb,
+      emissive: 0xffffaa,
+      emissiveIntensity: 1.5,
+      roughness: 0.5,
+      metalness: 0
+    })
+  );
+  flame2.rotation.x = Math.PI;
+  flame2.position.y = -0.3;
+  flame2.name = 'flameCore';
+  flame2.visible = false;
+  g.add(flame2);
   return g;
 }
 
