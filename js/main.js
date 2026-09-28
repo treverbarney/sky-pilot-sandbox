@@ -546,7 +546,7 @@ function spawnVehicle(kind) {
   el.groundUi.classList.remove('hidden');
   document.getElementById('btn-swoop').classList.add('hidden');
   document.getElementById('btn-dive').classList.add('hidden');
-  hud.toast(`${kind === 'bike' ? 'Motorcycle ~270 mph' : 'Supercar ~310 mph'} — hold throttle, light steer aims hangar`);
+  hud.toast(`${kind === 'bike' ? 'Bike — lean it, easy high-side' : 'Car — planted, understeers at speed'} · hit stuff and you wreck`);
 }
 
 function teleportAirport() {
@@ -609,7 +609,9 @@ function crashTip(reason = '') {
   if (r.includes('fast')) return 'ATP tip: bleed to Vref before the threshold';
   if (r.includes('gear')) return 'ATP tip: three green before flare';
   if (r.includes('water') || r.includes('ditch')) return 'ATP tip: only the amphib is rated for the lake';
-  if (r.includes('unstable')) return 'ATP tip: stable by 500 ft — path, speed, config';
+  if (r.includes('bike') || r.includes('car') || r.includes('hit') || r.includes('high-side') || r.includes('lake')) {
+    return 'Slow down before buildings, woods, hangar, and water';
+  }
   return 'You can retry or hangar — sandbox still wants you flying';
 }
 

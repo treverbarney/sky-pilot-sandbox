@@ -1046,6 +1046,27 @@ export function createWorld(scene, opts = {}) {
       }
       return best;
     },
+    onRoad(x, z) {
+      for (const rd of WORLD.roads || []) {
+        const dx = rd.bx - rd.ax, dz = rd.bz - rd.az;
+        const len = Math.hypot(dx, dz) || 1;
+        const t = Math.max(0, Math.min(1, ((x - rd.ax) * dx + (z - rd.az) * dz) / (len * len)));
+        const px = rd.ax + dx * t, pz = rd.az + dz * t;
+        if (Math.hypot(x - px, z - pz) < 9) return true;
+      }
+      return Math.abs(x) < WORLD.runway.halfW + 10 && Math.abs(z) < WORLD.runway.halfL + 12;
+    },
+    hitSolid(x, z) {
+      if (Math.hypot(x - WORLD.hangar.x, z - WORLD.hangar.z) < 22) return 'hangar';
+      if (Math.hypot(x - 70, z + 30) < 10) return 'tower';
+      const cx = x - WORLD.city.x, cz = z - WORLD.city.z;
+      const cd = Math.hypot(cx, cz);
+      if (cd < 95 && cd > 32) return 'building';
+      const fx = x - WORLD.forest.x, fz = z - WORLD.forest.z;
+      if (fx * fx + fz * fz < (WORLD.forest.r * 0.82) ** 2 && !this.onRoad(x, z)) return 'tree';
+      if (Math.hypot(x - WORLD.city.x - 70, z - WORLD.city.z + 40) < 12) return 'water-tower';
+      return null;
+    },
     setDusk(on) {
       scene.background = new THREE.Color(on ? 0x2a3a68 : 0x6ec8ff);
       scene.fog = new THREE.FogExp2(on ? 0x6a7aa0 : 0xb8d8f4, on ? 0.00028 : 0.00018);

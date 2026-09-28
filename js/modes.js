@@ -173,50 +173,89 @@ export class ModeManager {
   }
 
   _updateVehicle(dt, controls, world) {
-    // Ultra-fast return: bike ~270 mph, car ~310 mph
-    const maxSpd = this.mode === 'bike' ? 122 : 140;
-    const accel = this.mode === 'bike' ? 48 : 52;
+    const bike = this.mode === 'bike';
+    const maxSpd = bike ? 118 : 138;
+    const accel = bike ? 62 : 44;
+    const coast = bike ? 22 : 14;
+    const brakeDec = bike ? 70 : 55;
+    const grip = bike ? 0.72 : 1.15;
     const thr = controls.throttle;
-    const steer = controls.aileron + controls.rudder * 0.55;
+    const steerIn = controls.aileron + controls.rudder * 0.55;
 
     const speed = Math.hypot(this.vel.x, this.vel.z);
-    const dir = speed > 1 ? Math.atan2(this.vel.x, this.vel.z) : this.heading;
-    this.heading = dir + steer * (0.22 + 0.7 * (1 - Math.min(1, speed / maxSpd))) * dt * (thr > 0.05 || speed > 5 ? 1 : 0.25);
+    const steerScale = bike
+      ? (0.55 + 0.9 * (1 - Math.min(1, speed / maxSpd)))
+      : (0.28 + 0.55 * (1 - Math.min(1, speed / maxSpd)));
+    this.heading += steerIn * steerScale * dt * (thr > 0.04 || speed > 4 ? 1 : 0.2);
 
-    // Light auto-aim toward hangar when not steering hard
-    if (Math.abs(steer) < 0.12 && thr > 0.2) {
+    if (!bike && Math.abs(steerIn) < 0.1 && thr > 0.25) {
       const want = Math.atan2(WORLD.hangar.x - this.pos.x, WORLD.hangar.z - this.pos.z);
       let d = want - this.heading;
       while (d > Math.PI) d -= Math.PI * 2;
       while (d < -Math.PI) d += Math.PI * 2;
-      this.heading += d * Math.min(0.9, dt * 1.4);
+      this.heading += d * Math.min(0.55, dt * 0.9);
     }
 
     const fwd = new THREE.Vector3(Math.sin(this.heading), 0, Math.cos(this.heading));
     let spd = speed;
     if (thr > 0.02) spd = Math.min(maxSpd, spd + accel * thr * dt);
-    else spd = Math.max(0, spd - 18 * dt);
-    if (controls.brakes) spd = Math.max(0, spd - 62 * dt);
+    else spd = Math.max(0, spd - coast * dt);
+    if (controls.brakes) spd = Math.max(0, spd - brakeDec * dt);
+
+    const onR = world.onRoad?.(this.pos.x, this.pos.z);
+    if (!onR) spd *= bike ? 0.985 : 0.992;
 
     this.vel.x = fwd.x * spd;
     this.vel.z = fwd.z * spd;
-    this.vel.y = 0;
+
+    const prevY = this.pos.y;
     this.pos.x += this.vel.x * dt;
     this.pos.z += this.vel.z * dt;
     const ground = world.getHeight(this.pos.x, this.pos.z);
-    if (world.isWater(this.pos.x, this.pos.z) && spd > 28) {
-      this.alive = false;
-      return { event: 'crash', reason: 'drove into lake' };
+    const hop = ground - (prevY - 0.55);
+    if (hop > 2.4 && spd > 18) {
+      this.vel.y = Math.min(14, hop * 1.6);
     }
-    this.pos.y = ground + 0.5;
+    this.vel.y = (this.vel.y || 0) - 22 * dt;
+    this.pos.y += this.vel.y * dt;
+    if (this.pos.y < ground + 0.55) {
+      this.pos.y = ground + 0.55;
+      this.vel.y = 0;
+    }
+
+    if (world.isWater(this.pos.x, this.pos.z) && spd > 16) {
+      this.alive = false;
+      return { event: 'crash', reason: bike ? 'bike in the lake' : 'car in the lake' };
+    }
+
+    const hit = world.hitSolid?.(this.pos.x, this.pos.z);
+    if (hit && spd > (bike ? 9 : 14)) {
+      this.alive = false;
+      return { event: 'crash', reason: `hit ${hit}` };
+    }
+
+    if (bike && !onR && spd > 55 && Math.abs(steerIn) > 0.75) {
+      this.alive = false;
+      return { event: 'crash', reason: 'high-side' };
+    }
+
+    const lean = bike
+      ? -steerIn * Math.min(0.72, 0.18 + spd / 90)
+      : -steerIn * Math.min(0.32, spd / 160);
+    const pitch = bike && controls.elevator < -0.35 && spd > 20 ? -0.28 : Math.min(0.15, (this.vel.y || 0) * 0.02);
     this.mesh.position.copy(this.pos);
     this.mesh.rotation.y = this.heading;
-    this.mesh.rotation.z = -steer * Math.min(0.4, spd / 90);
+    this.mesh.rotation.z = lean / Math.max(0.65, grip);
+    this.mesh.rotation.x = pitch;
+    this.mesh.traverse((o) => {
+      if (o.name === 'wheel' || o.name === 'wheelF' || o.name === 'wheelR') {
+        o.rotation.x += spd * dt * 0.8;
+      }
+    });
+
     const distH = Math.hypot(this.pos.x - WORLD.hangar.x, this.pos.z - WORLD.hangar.z);
-    if (distH < 55 && spd < 25) {
-      return { event: 'airport_arrive' };
-    }
-    return { event: 'vehicle_state', speed: spd, distH };
+    if (distH < 55 && spd < 25) return { event: 'airport_arrive' };
+    return { event: 'vehicle_state', speed: spd, distH, onRoad: !!onR };
   }
 
   _updateBalloon(dt, controls, world) {

@@ -1,5 +1,5 @@
 /* Sky Pilot Sandbox — network-first app shell + CDN; cache fallback offline */
-const CACHE = 'sky-pilot-sandbox-v13';
+const CACHE = 'sky-pilot-sandbox-v14';
 const SHELL = [
   './',
   './index.html',

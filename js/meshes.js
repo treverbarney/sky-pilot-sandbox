@@ -719,47 +719,55 @@ export function createParachuteMesh() {
 
 export function createMotorcycleMesh() {
   const g = new THREE.Group();
-  addBox(g, 0.45, 0.55, 1.7, makeToonPbr({ color: 0xff2200, roughness: 0.4, metalness: 0.35 }), 0, 0.6, 0);
-  addBox(g, 0.35, 0.25, 0.5, makeFarLambert(0x111111), 0, 0.95, -0.35);
-  for (const z of [-0.75, 0.75]) {
-    addCyl(g, 0.38, 0.38, 0.16, 12, makeToonPbr({ color: 0x111111, roughness: 0.95 }), 0, 0.38, z, 0, 0, Math.PI / 2);
-    addCyl(g, 0.22, 0.22, 0.08, 8, makeToonPbr({ color: 0x888888, metalness: 0.7, roughness: 0.3 }), 0, 0.38, z, 0, 0, Math.PI / 2);
+  const red = makeToonPbr({ color: 0xff2a22, roughness: 0.38, metalness: 0.42, envMapIntensity: 0.45 });
+  const black = makeFarLambert(0x141418);
+  const chrome = makeToonPbr({ color: 0xd0d6dc, roughness: 0.22, metalness: 0.82 });
+  addBox(g, 0.42, 0.38, 1.55, red, 0, 0.58, 0.05);
+  addBox(g, 0.36, 0.22, 0.55, black, 0, 0.78, -0.45);
+  addBox(g, 0.28, 0.16, 0.4, red, 0, 0.72, 0.55);
+  addCyl(g, 0.16, 0.18, 0.55, 8, chrome, 0, 0.55, 0.12, Math.PI / 2);
+  for (const z of [-0.78, 0.78]) {
+    const wheel = addCyl(g, 0.4, 0.4, 0.16, 14, makeToonPbr({ color: 0x111111, roughness: 0.95 }), 0, 0.4, z, 0, 0, Math.PI / 2);
+    wheel.name = z > 0 ? 'wheelF' : 'wheelR';
+    addCyl(g, 0.22, 0.22, 0.1, 10, chrome, 0, 0.4, z, 0, 0, Math.PI / 2);
   }
-  addBox(g, 0.08, 0.5, 0.08, makeFarLambert(0x444444), 0, 0.7, 0.55);
-  addBox(g, 0.7, 0.06, 0.06, makeToonPbr({ color: 0xcccccc, metalness: 0.8, roughness: 0.25 }), 0, 0.95, 0.55);
-  addBox(g, 0.4, 0.65, 0.4, makeFarLambert(0x1a1a22), 0, 1.15, -0.15);
+  addBox(g, 0.07, 0.55, 0.07, chrome, 0, 0.72, 0.58);
+  addBox(g, 0.72, 0.05, 0.05, chrome, 0, 0.98, 0.62);
+  addBox(g, 0.12, 0.12, 0.12, black, -0.32, 0.98, 0.62);
+  addBox(g, 0.12, 0.12, 0.12, black, 0.32, 0.98, 0.62);
+  addBox(g, 0.38, 0.55, 0.38, makeFarLambert(0x1c2430), 0, 1.12, -0.12);
+  addBox(g, 0.28, 0.22, 0.28, makeFarLambert(0xddbb99), 0, 1.48, -0.08);
+  addBox(g, 0.22, 0.08, 0.18, makeToonPbr({ color: 0xffe066, emissive: 0xffaa33, emissiveIntensity: 0.7 }), 0, 0.55, 0.95);
+  addBox(g, 0.16, 0.06, 0.08, makeToonPbr({ color: 0xff2222, emissive: 0xff0000, emissiveIntensity: 0.5 }), 0, 0.52, -0.88);
+  addBox(g, 0.08, 0.18, 0.28, black, 0, 0.62, -0.85);
   return g;
 }
 
 export function createSupercarMesh() {
   const g = new THREE.Group();
-  const body = makeToonPbr({ color: 0x00c8ff, roughness: 0.35, metalness: 0.45, envMapIntensity: 0.55 });
-  addBox(g, 1.9, 0.45, 4.4, body, 0, 0.5, 0);
-  addBox(g, 1.7, 0.25, 1.2, body, 0, 0.78, -0.6);
-  addBox(g, 1.55, 0.35, 1.5, makeFarLambert(0x0a2030), 0, 0.95, -0.15);
-  addBox(
-    g,
-    1.5,
-    0.08,
-    1.0,
-    makeToonPbr({ color: 0x88ddee, transparent: true, opacity: 0.5, roughness: 0.15, metalness: 0.1 }),
-    0,
-    1.12,
-    0.35,
-    -0.25,
-    0,
-    0
-  );
-  for (const [x, z] of [
-    [-0.85, 1.4],
-    [0.85, 1.4],
-    [-0.85, -1.4],
-    [0.85, -1.4]
-  ]) {
-    addCyl(g, 0.36, 0.36, 0.28, 12, makeToonPbr({ color: 0x111111, roughness: 0.95 }), x, 0.36, z, 0, 0, Math.PI / 2);
+  const body = makeToonPbr({ color: 0x00c8ff, roughness: 0.32, metalness: 0.52, envMapIntensity: 0.6 });
+  const dark = makeFarLambert(0x0a1520);
+  const glass = makeToonPbr({ color: 0x88ddee, transparent: true, opacity: 0.48, roughness: 0.12, metalness: 0.12 });
+  addBox(g, 1.95, 0.42, 4.5, body, 0, 0.52, 0);
+  addBox(g, 1.75, 0.22, 1.15, body, 0, 0.82, -0.65);
+  addBox(g, 1.85, 0.16, 0.7, body, 0, 0.48, 1.85);
+  addBox(g, 1.6, 0.32, 1.45, dark, 0, 0.98, -0.12);
+  addBox(g, 1.48, 0.08, 1.05, glass, 0, 1.16, 0.38, -0.22);
+  addBox(g, 0.06, 0.18, 1.1, glass, 0.78, 0.95, 0.05);
+  addBox(g, 0.06, 0.18, 1.1, glass, -0.78, 0.95, 0.05);
+  addBox(g, 1.15, 0.06, 1.6, dark, 0, 0.34, 0.1);
+  for (const [x, z] of [[-0.88, 1.45], [0.88, 1.45], [-0.88, -1.45], [0.88, -1.45]]) {
+    const wh = addCyl(g, 0.38, 0.38, 0.3, 14, makeToonPbr({ color: 0x111111, roughness: 0.95 }), x, 0.38, z, 0, 0, Math.PI / 2);
+    wh.name = 'wheel';
+    addCyl(g, 0.18, 0.18, 0.32, 8, makeToonPbr({ color: 0xc9d0d6, metalness: 0.7, roughness: 0.3 }), x, 0.38, z, 0, 0, Math.PI / 2);
   }
-  addBox(g, 1.6, 0.08, 0.15, makeToonPbr({ color: 0xffffff, emissive: 0xffffee, emissiveIntensity: 0.6 }), 0, 0.45, 2.15);
-  addBox(g, 1.4, 0.06, 0.08, makeToonPbr({ color: 0xff2222, emissive: 0xff0000, emissiveIntensity: 0.5 }), 0, 0.45, -2.15);
+  addBox(g, 1.55, 0.1, 0.16, makeToonPbr({ color: 0xffffff, emissive: 0xffffee, emissiveIntensity: 0.85 }), 0, 0.48, 2.22);
+  addBox(g, 1.35, 0.07, 0.1, makeToonPbr({ color: 0xff2222, emissive: 0xff0000, emissiveIntensity: 0.65 }), 0, 0.46, -2.22);
+  addBox(g, 1.7, 0.04, 0.55, dark, 0, 0.28, -2.05);
+  addBox(g, 0.55, 0.08, 0.35, makeFarLambert(0xffcc33), 0, 0.72, 1.55);
+  addBox(g, 0.12, 0.12, 0.12, makeFarLambert(0x111111), 0.55, 0.62, 1.9);
+  addBox(g, 0.12, 0.12, 0.12, makeFarLambert(0x111111), -0.55, 0.62, 1.9);
+  addBox(g, 0.08, 0.22, 0.08, dark, 0, 0.7, -0.9);
   return g;
 }
 
