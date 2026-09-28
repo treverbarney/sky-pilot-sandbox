@@ -629,7 +629,6 @@ function spawnVehicle(kind) {
   document.getElementById('btn-board')?.classList.add('hidden');
   if (modes._dino) modes._dino.visible = false;
 }
-}
 
 function teleportAirport() {
   modes.clearActive();
@@ -1077,6 +1076,7 @@ function loop() {
         hud.toast(`E / BOARD — ${n.name}`);
       }
     }
+    if (ev?.event === 'airport_arrive' && !_airportToast) {
       _airportToast = true;
       hud.toast('Back at the airport — teleport or hangar');
     }
