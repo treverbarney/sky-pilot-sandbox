@@ -371,8 +371,10 @@ export class FlightModel {
         if ((s.id === 'cessna182' || (s.diff === 'easy' && s.type === 'prop') || s.snappy) && spdNow > 12) {
           this.euler.z += Math.sign(wx || 1) * ws * 0.09 * dt * Math.min(1, (spdNow - 12) / 22);
           if (Math.abs(this.euler.z) > 0.9 && spdNow > 16) {
-            this.alive = false;
-            return { event: 'crash', reason: 'ground loop / tip-over', vert: 0, gs: spdNow };
+            this.euler.z *= 0.4;
+            this.velocity.x *= 0.55;
+            this.velocity.z *= 0.55;
+            return { event: 'rough', reason: 'ground loop — standard fail, keep rolling', vert: 0, gs: spdNow };
           }
         }
       }
@@ -396,8 +398,16 @@ export class FlightModel {
       if (isWater && s.canWater) {
         return this._handleWaterContact(wasGround, vert, gs);
       } else if (isWater && !s.canWater) {
-        this.alive = false;
-        return { event: 'crash', reason: 'ditched', vert, gs };
+        // GTA-style skip/ditch: only wreck on a slam
+        if (vert > 12) {
+          this.alive = false;
+          return { event: 'crash', reason: 'ditched too hard', vert, gs };
+        }
+        this.velocity.y = Math.abs(this.velocity.y) * 0.35;
+        this.velocity.x *= 0.7;
+        this.velocity.z *= 0.7;
+        this.position.y = contactY + 0.8;
+        return { event: 'rough', reason: 'water contact — not amphib (ATP fail)', vert, gs };
       } else {
         return this._handleGroundContact(wasGround, vert, gs, isWater);
       }
@@ -415,12 +425,18 @@ export class FlightModel {
 
     // Gear DOWN on water = wreck for amphib
     if (s.hasGear && this.gearDown && this.airborneTime > 1.5 && vert > 0.3) {
-      this.alive = false;
-      return { event: 'crash', reason: 'gear down on water', vert, gs };
+      if (vert > 10) {
+        this.alive = false;
+        return { event: 'crash', reason: 'gear down on water', vert, gs };
+      }
+      this.velocity.y = 0;
+      this.velocity.x *= 0.5;
+      this.velocity.z *= 0.5;
+      return { event: 'rough', reason: 'gear down on water — ATP fail', vert, gs };
     }
 
     const vmax = s.waterLandVertMax || 2.5;
-    if (vert > vmax || gs > s.landSpeedMax * 1.25) {
+    if (vert > 12 || gs > (s.landSpeedMax || 40) * 2.2) {
       this.alive = false;
       return { event: 'crash', reason: 'water impact', vert, gs };
     }
@@ -444,8 +460,7 @@ export class FlightModel {
       const score = this._scoreLanding(vert, gs, true);
       this.lastTouchScore = score;
       if (score.fail) {
-        this.alive = false;
-        return { event: 'crash', reason: score.reason, vert, gs, score };
+        return { event: 'land', surface: 'water', vert, gs, score, standardFail: true };
       }
       return { event: 'land', surface: 'water', vert, gs, score };
     }
@@ -458,61 +473,42 @@ export class FlightModel {
 
     // Amphib gear UP on land = crash
     if (s.canWater && s.hasGear && !this.gearDown && this.airborneTime > 1.5 && vert > 0.5) {
-      this.alive = false;
-      return { event: 'crash', reason: 'gear up on land', vert, gs };
+      if (vert > 12) {
+        this.alive = false;
+        return { event: 'crash', reason: 'belly on land', vert, gs };
+      }
+      this.velocity.x *= 0.6;
+      this.velocity.z *= 0.6;
     }
 
     const gearOk = !s.hasGear || s.gearFixed || this.gearDown;
     if (!gearOk && this.airborneTime > 1.5 && vert > 0.5) {
-      this.alive = false;
-      return { event: 'crash', reason: 'gear up', vert, gs };
+      if (vert > 12) {
+        this.alive = false;
+        return { event: 'crash', reason: 'gear up wreck', vert, gs };
+      }
+      this.velocity.x *= 0.55;
+      this.velocity.z *= 0.55;
     }
 
     if (this.airborneTime > 1.5) {
       const score = this._scoreLanding(vert, gs, false);
       this.lastTouchScore = score;
 
-      // Hard physics fails
-      if (vert > s.landVertMax || gs > s.landSpeedMax) {
+      // Only a smash ends the flight. ATP numbers still live on the score.
+      if (vert > 14) {
         this.alive = false;
         return {
           event: 'crash',
-          reason: vert > s.landVertMax ? 'hard landing' : 'too fast',
+          reason: 'impact — airframe limit',
           vert, gs, score
         };
       }
-      // Privatejet: spoilers + gear mandatory on touch
-      if (s.requireGearSpoilersGate || s.id === 'privatejet') {
-        const gearOkPj = !s.gearRetractable || this.gearDown;
-        const armedPj = !!(this.spoilersArmed || this.spoilers);
-        if (!gearOkPj || !armedPj) {
-          const reason = !gearOkPj ? 'gear up' : 'spoilers not armed';
-          this.alive = false;
-          if (score) { score.fail = true; score.reason = reason; score.issues = [reason, ...(score.issues || [])]; }
-          return { event: 'crash', reason, vert, gs, score };
-        }
-      }
-      // Airliner hard-gate: unstable OR flaps not full OR gear up OR spoilers not armed → crash
-      if (s.id === 'airliner' || s.landHardGate) {
-        const flapsFull = this.flaps >= (s.flapLanding ?? 0.95) - 0.05;
-        const gearOk = !s.gearRetractable || this.gearDown;
-        const armed = !!(this.spoilersArmed || this.spoilers);
-        const stableOk = this.stableApproach === true || this._passedStableGate;
-        if (!flapsFull || !gearOk || !armed || !stableOk) {
-          const reason = !gearOk ? 'gear up'
-            : !flapsFull ? 'flaps not full'
-            : !armed ? 'spoilers not armed'
-            : 'unstable approach';
-          this.alive = false;
-          if (score) { score.fail = true; score.reason = reason; score.issues = [reason, ...(score.issues || [])]; }
-          return { event: 'crash', reason, vert, gs, score };
-        }
-      }
-
-      // Config fails for hard/med aircraft
-      if (score.fail && (s.enforceGear || s.enforceFlapsLanding || s.diff === 'hard' || s.diff === 'expert')) {
-        this.alive = false;
-        return { event: 'crash', reason: score.reason, vert, gs, score };
+      if (vert > (s.landVertMax || 3) * 2.2) {
+        this.velocity.y = vert * 0.22;
+        this.onGround = false;
+        this.position.y += 0.6;
+        return { event: 'bounce', vert, gs, score, standardFail: true };
       }
     }
 

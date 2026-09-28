@@ -1499,7 +1499,30 @@ button, input {
 .ac-card.locked { opacity: 0.55; filter: grayscale(0.35); }
 .ac-card.locked .btn-card-fly { pointer-events: none; }
 
-.nav-chip {
+.standard-banner {
+  position: absolute;
+  left: 50%;
+  top: calc(118px + var(--safe-t));
+  transform: translateX(-50%);
+  max-width: 92%;
+  background: rgba(8, 22, 16, 0.88);
+  border: 1px solid rgba(61, 214, 140, 0.45);
+  color: #d8ffe8;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 7px 12px;
+  border-radius: 10px;
+  pointer-events: none;
+  text-align: center;
+}
+.standard-banner.fail {
+  background: rgba(40, 14, 14, 0.9);
+  border-color: rgba(255, 180, 80, 0.55);
+  color: #ffe2b0;
+}
+.ac-card.unlicensed { box-shadow: inset 0 0 0 1px rgba(255, 193, 74, 0.35); }
   position: absolute;
   left: 12px;
   top: calc(86px + var(--safe-t));

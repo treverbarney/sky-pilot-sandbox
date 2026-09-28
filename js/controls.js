@@ -180,11 +180,19 @@ export class Controls {
       window.addEventListener('deviceorientation', this._onOrient);
       this.motionEnabled = true;
       this.motionMsg = 'Motion enabled — hold phone ~45° upright';
+      this.recenter();
       return true;
     } catch (err) {
       this.motionMsg = 'Motion error: ' + (err.message || err);
       return false;
     }
+  }
+
+  recenter() {
+    this._baseBeta = this._orient.beta ?? 45;
+    this._smoothA = 0;
+    this._smoothE = 0;
+    this.motionMsg = 'Recentered';
   }
 
   _onOrient = (e) => {
@@ -772,16 +780,17 @@ export class Controls {
 
     const expoAmt = this.spec?.inputExpo ?? 1.45;
     const gain = this.spec?.tiltGain ?? 1;
-    const dead = 0.07;
-    const shaped = (v) => {
-      const s = Math.sign(v);
-      const mag = Math.abs(v);
-      if (mag < dead) return 0;
-      const t = (mag - dead) / (1 - dead);
-      return s * Math.pow(t, expoAmt) * gain;
-    };
-    a = shaped(a);
-    e = shaped(e);
+    const dead = 0.06;
+    const radial = Math.hypot(a, e);
+    if (radial < dead) {
+      a = 0;
+      e = 0;
+    } else {
+      const t = (radial - dead) / (1 - dead);
+      const shaped = Math.pow(t, expoAmt) * gain;
+      a = (a / radial) * shaped;
+      e = (e / radial) * shaped;
+    }
 
     const smooth = this.spec?.id === 'airliner' || this.spec?.id === 'cargo' ? 0.12 : 0.18;
     this._smoothA += (a - this._smoothA) * smooth;

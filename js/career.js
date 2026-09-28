@@ -44,9 +44,14 @@ export function bronzeCount() {
 }
 
 export function isUnlocked(id) {
+  // Sandbox: every airframe is flyable. Medals are licenses, not locks.
+  return true;
+}
+
+export function licenseLocked(id) {
   const need = UNLOCK_NEED[id];
-  if (need == null) return bronzeCount() >= 1;
-  return bronzeCount() >= need;
+  if (need == null) return false;
+  return bronzeCount() < need;
 }
 
 export function saveBest(aircraftId, result) {

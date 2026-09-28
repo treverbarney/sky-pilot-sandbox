@@ -101,6 +101,7 @@ export class HUD {
       if (cfg.flapHint) chips.push({ label: cfg.flapHint, on: true });
     }
     if (cfg.smoke) chips.push({ label: 'SMOKE', on: true });
+    if (cfg.n1 != null) chips.push({ label: `N1 ${Math.round(cfg.n1 * 100)}`, on: cfg.n1 > 0.2 });
     this.configEl.innerHTML = chips
       .map((c) => `<span class="chip${c.on ? ' on' : ''}${c.warn ? ' warn' : ''}">${c.label}</span>`)
       .join('');

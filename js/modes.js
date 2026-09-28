@@ -179,7 +179,7 @@ export class ModeManager {
 
     const speed = Math.hypot(this.vel.x, this.vel.z);
     const dir = speed > 1 ? Math.atan2(this.vel.x, this.vel.z) : this.heading;
-    this.heading = dir + steer * (0.7 + speed * 0.008) * dt * (thr > 0.05 || speed > 5 ? 1 : 0.25);
+    this.heading = dir + steer * (0.22 + 0.7 * (1 - Math.min(1, speed / maxSpd))) * dt * (thr > 0.05 || speed > 5 ? 1 : 0.25);
 
     // Light auto-aim toward hangar when not steering hard
     if (Math.abs(steer) < 0.12 && thr > 0.2) {

@@ -51,6 +51,7 @@ let _wasOnGround = false;
 let paused = false;
 let duskOn = false;
 let _airportToast = false;
+let pathPip = null;
 
 const el = {
   menu: document.getElementById('menu'),
@@ -218,6 +219,10 @@ function wireButtons() {
     await controls.requestMotion();
     el.status.textContent = controls.motionMsg;
   });
+  document.getElementById('btn-recenter')?.addEventListener('click', () => {
+    controls.recenter();
+    hud.toast('Tilt recentered');
+  });
   document.getElementById('btn-eject').addEventListener('click', () => tryEject());
   document.getElementById('btn-retry').addEventListener('click', () => {
     if (currentSpec) startFlight(currentSpec.id);
@@ -235,14 +240,29 @@ function wireButtons() {
     if (currentSpec) checklist.setAircraft(currentSpec);
     hud.toast('Free explore — JUMP anytime');
   });
-  document.getElementById('btn-swoop').addEventListener('click', () => {
-    modes.swoop = !modes.swoop;
-    document.getElementById('btn-swoop').classList.toggle('on', modes.swoop);
-    hud.toast(modes.swoop ? 'Swoop ON — skim the ground' : 'Swoop off');
+  document.getElementById('btn-swoop').addEventListener('pointerdown', () => {
+    modes.swoop = true;
+    document.getElementById('btn-swoop').classList.add('on');
   });
-  document.getElementById('btn-dive').addEventListener('click', () => {
-    modes.dive = !modes.dive;
-    document.getElementById('btn-dive').classList.toggle('on', modes.dive);
+  document.getElementById('btn-swoop').addEventListener('pointerup', () => {
+    modes.swoop = false;
+    document.getElementById('btn-swoop').classList.remove('on');
+  });
+  document.getElementById('btn-swoop').addEventListener('pointercancel', () => {
+    modes.swoop = false;
+    document.getElementById('btn-swoop').classList.remove('on');
+  });
+  document.getElementById('btn-dive').addEventListener('pointerdown', () => {
+    modes.dive = true;
+    document.getElementById('btn-dive').classList.add('on');
+  });
+  document.getElementById('btn-dive').addEventListener('pointerup', () => {
+    modes.dive = false;
+    document.getElementById('btn-dive').classList.remove('on');
+  });
+  document.getElementById('btn-dive').addEventListener('pointercancel', () => {
+    modes.dive = false;
+    document.getElementById('btn-dive').classList.remove('on');
   });
   document.getElementById('btn-bike').addEventListener('click', () => spawnVehicle('bike'));
   document.getElementById('btn-car').addEventListener('click', () => spawnVehicle('car'));
@@ -310,18 +330,13 @@ function cleanupCraft() {
 }
 
 function startFlight(id) {
-  if (!isUnlocked(id)) {
-    hud?.toast?.('Earn more medals to unlock this aircraft');
-    if (el.status) el.status.textContent = 'Locked — bronze a few easier tests first.';
-    return;
-  }
   const spec = getAircraft(id);
   currentSpec = spec;
   cleanupCraft();
   modes.clearActive();
 
   flight = new FlightModel(spec);
-  const spawn = new THREE.Vector3(-30, 2, -WORLD.runway.halfL + 80);
+  const spawn = new THREE.Vector3(-8, 2, -WORLD.runway.halfL + 30);
   if (spec.type === 'glider') {
     spawn.set(0, 400, -200);
     flight.reset(spawn, 0, 40);
@@ -372,7 +387,7 @@ function startFlight(id) {
     : spec.type === 'glider'
       ? 'Energy management — spoilers for path'
       : `Checklist: rotate ~${msToKt(spec.vr).toFixed(0)} kt`;
-  hud.toast(`${label} — ${tip}`);
+  hud.toast(`${label} — ${tip} · sandbox: fly anywhere`);
   const kind = testKindFor(spec);
   course?.layoutFor(spec, kind);
   hud.setMission(`${kind.toUpperCase()} 0/${course.total} rings`);
@@ -505,6 +520,19 @@ function teleportAirport() {
   }
 }
 
+function showStandard(msg, fail = false) {
+  const elStd = document.getElementById('standard-banner');
+  if (!elStd) {
+    hud.toast(msg, 3.2);
+    return;
+  }
+  elStd.textContent = msg;
+  elStd.classList.toggle('fail', !!fail);
+  elStd.classList.remove('hidden');
+  clearTimeout(showStandard._t);
+  showStandard._t = setTimeout(() => elStd.classList.add('hidden'), 4200);
+}
+
 function handleCrash(reason) {
   if (flight && craftMesh) {
     effects.explode(flight.position.clone());
@@ -514,6 +542,7 @@ function handleCrash(reason) {
   }
   audio?.crash();
   audio?.hush();
+  buzz(40);
   const ringsHit = course?.hit || 0;
   const result = scoreTest({
     ringsHit,
@@ -522,7 +551,8 @@ function handleCrash(reason) {
     crashed: true
   });
   gameMode = 'crash';
-  el.crashMsg.textContent = `${reason || 'Impact'} · rings ${ringsHit}/${course?.total || 0} · ${result.points}/100`;
+  const tip = crashTip(reason);
+  el.crashMsg.textContent = `${reason || 'Impact'} · ${tip} · rings ${ringsHit}/${course?.total || 0}`;
   el.crash.classList.remove('hidden');
   showFlightUI(false);
   el.groundUi.classList.add('hidden');
@@ -530,6 +560,16 @@ function handleCrash(reason) {
   hud.setMission('');
   checklist?.hide();
   hud.setMode('CRASH');
+}
+
+function crashTip(reason = '') {
+  const r = String(reason).toLowerCase();
+  if (r.includes('hard') || r.includes('impact') || r.includes('sink')) return 'ATP tip: flare and idle — sink under ~240 fpm';
+  if (r.includes('fast')) return 'ATP tip: bleed to Vref before the threshold';
+  if (r.includes('gear')) return 'ATP tip: three green before flare';
+  if (r.includes('water') || r.includes('ditch')) return 'ATP tip: only the amphib is rated for the lake';
+  if (r.includes('unstable')) return 'ATP tip: stable by 500 ft — path, speed, config';
+  return 'You can retry or hangar — sandbox still wants you flying';
 }
 
 function handleLanding(info) {
@@ -540,19 +580,6 @@ function handleLanding(info) {
   } else {
     effects.landingDust(pos, Math.min(2, 0.5 + (info.vert || 1)));
   }
-  let msg = `Touchdown ${info.surface || 'runway'} — ${info.gs?.toFixed?.(0) || '?'} m/s, sink ${info.vert?.toFixed?.(1) || '?'} m/s`;
-  if (info.score) {
-    msg += ` · ${info.score.grade || ''} ${info.score.points}/100`;
-    const b = info.score.breakdown;
-    if (b) {
-      msg += ` [cfg ${b.config >= 0 ? '+' : ''}${b.config} sink ${b.sink >= 0 ? '+' : ''}${b.sink} spd ${b.speed >= 0 ? '+' : ''}${b.speed} align ${b.align >= 0 ? '+' : ''}${b.align} flare ${b.flare >= 0 ? '+' : ''}${b.flare}]`;
-    }
-  }
-  if (info.score?.issues?.length) msg += ` (${info.score.issues.join(', ')})`;
-  if (spec) msg += ` · ${displayNameFor(spec.id, spec.name)}`;
-  if (checklistStatus && !checklistStatus.complete && (spec?.diff === 'hard' || spec?.diff === 'expert')) {
-    msg += ' · checklist incomplete';
-  }
   const result = scoreTest({
     ringsHit: course?.hit || 0,
     ringsTotal: course?.total || 0,
@@ -560,20 +587,20 @@ function handleLanding(info) {
     crashed: false
   });
   if (spec) saveBest(spec.id, result);
+  const atpFail = !!(info.standardFail || info.score?.fail || result.medal === 'none');
   const medal = MEDAL[result.medal]?.label || result.grade;
-  msg += ` · TEST ${result.rings}/${result.ringsTotal} rings · ${result.points}/100 ${medal}`;
+  const sink = info.vert != null ? `${info.vert.toFixed(1)} m/s sink` : '';
+  const issues = info.score?.issues?.length ? info.score.issues.join(', ') : '';
+  const std = atpFail
+    ? `ATP STANDARD: FAIL${issues ? ' — ' + issues : ''} · still flying`
+    : `ATP STANDARD: PASS · ${medal} ${result.points}/100`;
+  showStandard(`${std} · ${sink}`, atpFail);
+  hud.toast(atpFail ? 'Keep going — that would not pass a checkride' : `Nice — ${medal}`, 2.8);
   if (result.medal === 'gold' || result.medal === 'silver') audio?.medal();
   else audio?.land((info.vert || 2) < 2);
-  audio?.hush();
-  el.landMsg.textContent = msg;
   const medalEl = document.getElementById('land-medal');
   if (medalEl) medalEl.textContent = medal === '—' ? '' : medal;
-  el.landed.classList.remove('hidden');
-  gameMode = 'landed';
-  showFlightUI(false);
-  hud.setMission('');
-  checklist?.hide();
-  hud.setMode('LAND');
+  // Do not steal the stick — GTA sandbox stays in flight.
 }
 
 function updateCamera(dt, targetPos, targetQuat, speed) {
@@ -596,7 +623,7 @@ function updateCamera(dt, targetPos, targetQuat, speed) {
     const quat = targetQuat || new THREE.Quaternion().setFromEuler(new THREE.Euler(0, modes.heading || 0, 0, 'YXZ'));
     const back = new THREE.Vector3(0, 0, -1).applyQuaternion(quat);
     const up = new THREE.Vector3(0, 1, 0);
-    const desired = targetPos.clone().addScaledVector(back, 22 + Math.min(40, speed * 0.08)).addScaledVector(up, 8);
+    const desired = targetPos.clone().addScaledVector(back, 18 + Math.min(55, speed * 0.14)).addScaledVector(up, 6 + Math.min(10, speed * 0.03));
     // Tiny speed-based camera lag (chase only) — higher speed → slightly softer follow
     const lag = Math.min(0.012, speed * 0.000035);
     const follow = Math.max(0.0004, 0.001 - lag);
@@ -647,6 +674,7 @@ function updateHudConfig() {
     flare,
     rotate: !!(flight.onGround && flight.rotateReady),
     smoke: !!controls.smokeOn,
+    n1: flight._engineN1,
     showVSpeeds,
     takeoffPhase,
     shortFinal,
@@ -844,33 +872,41 @@ function loop() {
 
     if (ev?.event === 'crash') {
       handleCrash(ev.reason);
+    } else if (ev?.event === 'bounce' || ev?.event === 'rough') {
+      showStandard(`ATP STANDARD: FAIL — ${ev.reason || 'unstable'} · keep flying`, true);
+      effects.landingDust(flight.position.clone(), 1.1);
     } else if (ev?.event === 'land') {
-      if ((currentSpec?.diff === 'hard' || currentSpec?.diff === 'expert') &&
-          checklistStatus && !checklistStatus.complete && currentSpec.enforceStableApproach) {
-        handleCrash('unstable water landing / checklist');
-      } else {
-        handleLanding({ ...ev, surface: 'water' });
-      }
+      handleLanding({ ...ev, surface: ev.surface || 'water' });
     } else if (ev?.event === 'touchdown') {
       const onRwy = world.isOnRunway(flight.position.x, flight.position.z);
-      if ((currentSpec?.diff === 'hard' || currentSpec?.diff === 'expert') &&
-          checklistStatus && !checklistStatus.complete &&
-          currentSpec.enforceStableApproach) {
-        flight.alive = false;
-        handleCrash('unstable approach / checklist incomplete');
-      } else if (currentSpec?.runwayOnly && !onRwy && !currentSpec.canWater) {
-        if (ev.vert > currentSpec.landVertMax * 0.7) {
-          flight.alive = false;
-          handleCrash('off-field landing');
-        } else {
-          handleLanding({ ...ev, surface: 'field' });
-        }
-      } else {
-        handleLanding({ ...ev, surface: onRwy ? 'runway' : 'ground' });
-      }
+      handleLanding({
+        ...ev,
+        surface: onRwy ? 'runway' : 'field',
+        standardFail: !onRwy && currentSpec?.runwayOnly
+      });
     }
 
     if (flight.position.y < -50) handleCrash('lost');
+
+    if (!pathPip) {
+      pathPip = new THREE.Mesh(
+        new THREE.SphereGeometry(1.2, 10, 8),
+        new THREE.MeshBasicMaterial({ color: 0x7cff9a, transparent: true, opacity: 0.7 })
+      );
+      scene.add(pathPip);
+    }
+    {
+      const vy = flight.velocity.y;
+      const aglPip = flight.position.y - th;
+      if (!flight.onGround && vy < -0.5 && aglPip < 420) {
+        const tHit = Math.min(12, aglPip / Math.max(0.35, -vy));
+        pathPip.visible = true;
+        pathPip.position.copy(flight.position).addScaledVector(flight.velocity, tHit);
+        pathPip.position.y = Math.max(th + 1.2, pathPip.position.y);
+      } else {
+        pathPip.visible = false;
+      }
+    }
 
     updateCamera(dt, flight.position, flight.quaternion, flight.getSpeed());
     hud.update(dt, {
