@@ -876,55 +876,6 @@ export function createRocketMesh() {
   return g;
 }
 
-export function createRocketMesh() {
-  const g = new THREE.Group();
-  addCyl(g, 1.15, 1.35, 12, 12, makeToonPbr({ color: 0xf2f2f5, roughness: 0.35, metalness: 0.45 }), 0, 7, 0);
-  const nose = new THREE.Mesh(
-    new THREE.ConeGeometry(1.15, 3.2, 12),
-    makeToonPbr({ color: 0xff3333, roughness: 0.4, metalness: 0.2 })
-  );
-  nose.position.y = 14.6;
-  g.add(nose);
-  addCyl(g, 1.18, 1.18, 0.6, 12, makeToonPbr({ color: 0x2244aa, roughness: 0.5, metalness: 0.2 }), 0, 10, 0);
-  for (let i = 0; i < 4; i++) {
-    const fin = addBox(g, 0.12, 2.6, 1.9, makeToonPbr({ color: 0xff3333, roughness: 0.45, metalness: 0.15 }));
-    const a = (i / 4) * Math.PI * 2;
-    fin.position.set(Math.cos(a) * 1.25, 2.1, Math.sin(a) * 1.25);
-    fin.rotation.y = a;
-  }
-  const flame = new THREE.Mesh(
-    new THREE.ConeGeometry(1.05, 3.5, 8),
-    makeToonPbr({
-      color: 0xffaa22,
-      emissive: 0xff8800,
-      emissiveIntensity: 1.2,
-      roughness: 0.6,
-      metalness: 0
-    })
-  );
-  flame.rotation.x = Math.PI;
-  flame.position.y = -0.6;
-  flame.name = 'flame';
-  flame.visible = false;
-  g.add(flame);
-  const flame2 = new THREE.Mesh(
-    new THREE.ConeGeometry(0.55, 2.2, 6),
-    makeToonPbr({
-      color: 0xffeebb,
-      emissive: 0xffffaa,
-      emissiveIntensity: 1.5,
-      roughness: 0.5,
-      metalness: 0
-    })
-  );
-  flame2.rotation.x = Math.PI;
-  flame2.position.y = -0.3;
-  flame2.name = 'flameCore';
-  flame2.visible = false;
-  g.add(flame2);
-  return g;
-}
-
 export function createExplosion(scene, pos) {
   const parts = [];
   const geo = new THREE.SphereGeometry(0.4, 6, 5);
