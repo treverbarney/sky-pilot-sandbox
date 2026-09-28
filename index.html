@@ -11,13 +11,14 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="css/style.css?v=11" />
+  <link rel="stylesheet" href="css/style.css?v=12" />
   <title>Sky Pilot Sandbox</title>
   <!-- Vite resolves three from node_modules; for plain python -m http.server use the CDN importmap in README -->
 </head>
 <body>
   <div id="app">
     <canvas id="c"></canvas>
+    <div id="stick-ghost" class="stick-ghost hidden"></div>
 
     <!-- HUD -->
     <div id="hud" class="hidden">
@@ -221,6 +222,6 @@
       </div>
     </div>
   </div>
-  <script type="module" src="js/main.js?v=11"></script>
+  <script type="module" src="js/main.js?v=12"></script>
 </body>
 </html>

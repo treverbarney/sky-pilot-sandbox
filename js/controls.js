@@ -209,12 +209,18 @@ export class Controls {
       if (ev.pointerType === 'mouse' && ev.button !== 0) return;
       this._stickActive = true;
       this._stickOrigin = { x: ev.clientX, y: ev.clientY };
+      const g = document.getElementById('stick-ghost');
+      if (g) {
+        g.classList.remove('hidden');
+        g.style.left = ev.clientX + 'px';
+        g.style.top = ev.clientY + 'px';
+      }
       canvas.setPointerCapture?.(ev.pointerId);
     };
     const move = (ev) => {
       if (!this._stickActive || !this._stickOrigin) return;
-      const dx = (ev.clientX - this._stickOrigin.x) / 72;
-      const dy = (ev.clientY - this._stickOrigin.y) / 72;
+      const dx = (ev.clientX - this._stickOrigin.x) / 96;
+      const dy = (ev.clientY - this._stickOrigin.y) / 96;
       this._stickA = clamp(dx, -1, 1);
       this._stickE = clamp(dy, -1, 1);
     };
@@ -222,6 +228,7 @@ export class Controls {
       this._stickActive = false;
       this._stickA = 0;
       this._stickE = 0;
+      document.getElementById('stick-ghost')?.classList.add('hidden');
     };
     canvas.addEventListener('pointerdown', start);
     window.addEventListener('pointermove', move);
@@ -780,7 +787,7 @@ export class Controls {
 
     const expoAmt = this.spec?.inputExpo ?? 1.45;
     const gain = this.spec?.tiltGain ?? 1;
-    const dead = 0.06;
+    const dead = this.spec?.diff === 'easy' ? 0.05 : 0.06;
     const radial = Math.hypot(a, e);
     if (radial < dead) {
       a = 0;
@@ -788,11 +795,13 @@ export class Controls {
     } else {
       const t = (radial - dead) / (1 - dead);
       const shaped = Math.pow(t, expoAmt) * gain;
-      a = (a / radial) * shaped;
-      e = (e / radial) * shaped;
+      a = (a / radial) * Math.min(1, shaped);
+      e = (e / radial) * Math.min(1, shaped);
     }
 
-    const smooth = this.spec?.id === 'airliner' || this.spec?.id === 'cargo' ? 0.12 : 0.18;
+    const smooth = this.spec?.id === 'airliner' || this.spec?.id === 'cargo'
+      ? 0.11
+      : (this.spec?.snappy ? 0.28 : 0.2);
     this._smoothA += (a - this._smoothA) * smooth;
     this._smoothE += (e - this._smoothE) * smooth;
     this.aileron = this._smoothA;

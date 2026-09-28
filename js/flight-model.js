@@ -288,6 +288,12 @@ export class FlightModel {
     this.euler.x += this._cmdPitch * dt;
     this.euler.y += this._cmdYaw * dt;
 
+    // Coordinated turn: bank produces heading change (user can still slip with rudder)
+    if (!s.isHeli && !this.onGround) {
+      const tas = Math.max(18, this.getAirHoriz?.() || this.getSpeed());
+      this.euler.y += Math.sin(this.euler.z) * (9.81 / tas) * dt * 1.15;
+    }
+
     // Dutch-roll / wing-rock in crosswind when banked (C182 touchy)
     const windSense = s.windSense ?? 0.5;
     const dutch = s.dutchRoll ?? 0;

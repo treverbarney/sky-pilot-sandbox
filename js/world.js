@@ -23,6 +23,22 @@ export const WORLD = {
     { x: 1100, z: 700, h: 380, r: 300 },
     { x: -200, z: 1100, h: 280, r: 250 },
     { x: 900, z: -1000, h: 500, r: 400 }
+  ],
+  forest: { x: 280, z: 720, r: 340 },
+  suburbs: { x: -500, z: 400, inner: 160, outer: 420 },
+  flats: [
+    { id: 'farm-north', name: 'North farm', x: 80, z: 520, r: 70 },
+    { id: 'prairie-east', name: 'East prairie', x: 980, z: -80, r: 80 },
+    { id: 'meadow-south', name: 'South meadow', x: -40, z: -1180, r: 75 },
+    { id: 'clearing-west', name: 'West clearing', x: -980, z: 80, r: 72 },
+    { id: 'ridge-flat', name: 'Ridge flat', x: 420, z: 1080, r: 55 }
+  ],
+  roads: [
+    { ax: 0, az: 0, bx: -500, bz: 400 },
+    { ax: -500, az: 400, bx: 280, bz: 720 },
+    { ax: 0, az: 0, bx: 600, bz: -400 },
+    { ax: 0, az: 0, bx: 80, bz: 520 },
+    { ax: -80, az: -40, bx: -500, bz: 400 }
   ]
 };
 
@@ -36,7 +52,10 @@ export const LANDMARKS = [
   { id: 'npeak', name: 'PEAK', x: -200, z: 1100 },
   { id: 'wpeak', name: 'WEST', x: -900, z: -800 },
   { id: 'balloon', name: 'BAL', x: 60, z: -80 },
-  { id: 'rocket', name: 'RKT', x: 120, z: -100 }
+  { id: 'forest', name: 'WOODS', x: 280, z: 720 },
+  { id: 'farm', name: 'FARM', x: 80, z: 520 },
+  { id: 'suburb', name: 'SUB', x: -720, z: 220 },
+  { id: 'prairie', name: 'FLAT', x: 980, z: -80 }
 ];
 
 export const STARS = [
@@ -54,7 +73,11 @@ export const LANDING_PADS = [
   { id: 'city-lot', name: 'City lot', x: -500, z: 400, r: 24, later: true },
   { id: 'north-shelf', name: 'North shelf', x: -180, z: 980, r: 28, later: true },
   { id: 'west-meadow', name: 'West meadow', x: -720, z: -620, r: 32, later: true },
-  { id: 'east-field', name: 'East field', x: 860, z: 180, r: 30, later: true }
+  { id: 'east-field', name: 'East field', x: 860, z: 180, r: 30, later: true },
+  { id: 'farm-north', name: 'North farm', x: 80, z: 520, r: 55, later: true },
+  { id: 'prairie-east', name: 'East prairie', x: 980, z: -80, r: 60, later: true },
+  { id: 'meadow-south', name: 'South meadow', x: -40, z: -1180, r: 55, later: true },
+  { id: 'clearing-west', name: 'West clearing', x: -980, z: 80, r: 55, later: true }
 ];
 
 function groundColor(x, z) {
@@ -65,7 +88,16 @@ function groundColor(x, z) {
   }
   if (Math.abs(x) < 200 && Math.abs(z) < 1000) return new THREE.Color(0x3a6e38);
   const cx = x - WORLD.city.x, cz = z - WORLD.city.z;
-  if (Math.abs(cx) < 220 && Math.abs(cz) < 220) return new THREE.Color(0x4a4a54);
+  if (Math.abs(cx) < 160 && Math.abs(cz) < 160) return new THREE.Color(0x4a4a54);
+  const sx = x - WORLD.suburbs.x, sz = z - WORLD.suburbs.z;
+  const sd = Math.hypot(sx, sz);
+  if (sd < WORLD.suburbs.outer && sd > WORLD.suburbs.inner) return new THREE.Color(0x6a7a58);
+  const fx = x - WORLD.forest.x, fz = z - WORLD.forest.z;
+  if (fx * fx + fz * fz < WORLD.forest.r * WORLD.forest.r) return new THREE.Color(0x2d5a32);
+  for (const f of WORLD.flats) {
+    const ddx = x - f.x, ddz = z - f.z;
+    if (ddx * ddx + ddz * ddz < f.r * f.r) return new THREE.Color(0x7a9a4a);
+  }
   const n = Math.sin(x * 0.01) * Math.cos(z * 0.01);
   const n2 = Math.sin(x * 0.003 + z * 0.004);
   if (n2 > 0.55) return new THREE.Color(0x5a7a42);
@@ -975,6 +1007,8 @@ export function createWorld(scene, opts = {}) {
     root.add(dot);
   });
 
+  decorateSandbox(root, qualityKey, useStd, tex);
+
   scene.add(root);
 
   const heightData = { geo, size: WORLD.size, segs };
@@ -1036,7 +1070,7 @@ export function createWorld(scene, opts = {}) {
           o.material.emissiveIntensity = 1.8 + Math.sin(t * 3.2) * 0.55;
         }
         if (o.name === 'sockCone') {
-          o.rotation.y = Math.sin(t * 1.4) * 0.35;
+          o.rotation.y = Math.atan2(WIND.x || 0.01, WIND.z || 0.01);
         }
         if (o.name === 'flock') {
           o.position.x = 180 + Math.sin(t * 0.18) * 90;
@@ -1072,6 +1106,169 @@ export function sampleHeight(x, z) {
   const dx = x - WORLD.lake.x, dz = z - WORLD.lake.z;
   if (dx * dx + dz * dz < (WORLD.lake.r + 30) ** 2) y = Math.min(y, 0.5);
   const cx = x - WORLD.city.x, cz = z - WORLD.city.z;
-  if (Math.abs(cx) < 220 && Math.abs(cz) < 220) y *= 0.05;
+  if (Math.abs(cx) < 280 && Math.abs(cz) < 280) y *= 0.04;
+  const fx = x - WORLD.forest.x, fz = z - WORLD.forest.z;
+  if (fx * fx + fz * fz < WORLD.forest.r * WORLD.forest.r) y = Math.min(y, 8);
+  for (const f of WORLD.flats || []) {
+    const ddx = x - f.x, ddz = z - f.z;
+    const d = Math.hypot(ddx, ddz);
+    if (d < f.r) y *= d / f.r * 0.15;
+  }
   return Math.max(0, y);
 }
+
+function decorateSandbox(root, qualityKey, useStd, tex) {
+  const low = qualityKey === 'low';
+  const roadMat = useStd
+    ? makeToonPbr({ color: 0x3a3a42, roughness: 0.92, metalness: 0.02 })
+    : makeFarLambert(0x3a3a42);
+  const dashMat = new THREE.MeshBasicMaterial({ color: 0xf2e9c4 });
+  const houseMat = [
+    makeFarLambert(0xe8dcc8),
+    makeFarLambert(0xd4c4a8),
+    makeFarLambert(0xc9d4c0)
+  ];
+  const roofMat = makeFarLambert(0x8a3a32);
+  const trunkMat = makeFarLambert(0x5a3a22);
+  const leafMat = makeFarLambert(0x3d8a4a);
+  const leafDark = makeFarLambert(0x2a6a38);
+
+  // Roads airport → city → woods → lake → farm
+  for (const rd of WORLD.roads) {
+    const dx = rd.bx - rd.ax, dz = rd.bz - rd.az;
+    const len = Math.hypot(dx, dz) || 1;
+    const road = new THREE.Mesh(new THREE.PlaneGeometry(12, len), roadMat);
+    road.rotation.x = -Math.PI / 2;
+    road.rotation.z = Math.atan2(dx, dz);
+    road.position.set((rd.ax + rd.bx) * 0.5, 0.4, (rd.az + rd.bz) * 0.5);
+    root.add(road);
+    const dashes = low ? 8 : 16;
+    for (let i = 0; i < dashes; i++) {
+      const t = (i + 0.5) / dashes;
+      const d = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 6), dashMat);
+      d.rotation.x = -Math.PI / 2;
+      d.rotation.z = Math.atan2(dx, dz);
+      d.position.set(rd.ax + dx * t, 0.45, rd.az + dz * t);
+      root.add(d);
+    }
+  }
+
+  // Forest
+  const treeN = low ? 48 : 110;
+  const trunkGeo = new THREE.CylinderGeometry(0.45, 0.7, 6, 6);
+  const crownGeo = new THREE.SphereGeometry(3.2, 8, 6);
+  const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, treeN);
+  const crowns = new THREE.InstancedMesh(crownGeo, leafMat, treeN);
+  const dummy = new THREE.Object3D();
+  for (let i = 0; i < treeN; i++) {
+    const ang = (i / treeN) * Math.PI * 2 + i * 0.37;
+    const rad = (WORLD.forest.r * 0.15) + (i % 9) / 9 * WORLD.forest.r * 0.8;
+    const x = WORLD.forest.x + Math.cos(ang) * rad;
+    const z = WORLD.forest.z + Math.sin(ang) * rad * 0.85;
+    const y = sampleHeight(x, z);
+    dummy.position.set(x, y + 3, z);
+    dummy.scale.set(1, 0.8 + (i % 5) * 0.12, 1);
+    dummy.updateMatrix();
+    trunks.setMatrixAt(i, dummy.matrix);
+    dummy.position.y = y + 7.2 + (i % 4);
+    dummy.scale.set(0.9 + (i % 3) * 0.2, 0.9, 0.9 + (i % 3) * 0.15);
+    dummy.updateMatrix();
+    crowns.setMatrixAt(i, dummy.matrix);
+  }
+  root.add(trunks);
+  root.add(crowns);
+
+  // Extra grove near lake
+  for (let i = 0; i < (low ? 8 : 16); i++) {
+    const x = WORLD.lake.x - 220 + (i % 8) * 18;
+    const z = WORLD.lake.z + 200 + Math.floor(i / 8) * 22;
+    const t = new THREE.Mesh(trunkGeo, trunkMat);
+    t.position.set(x, sampleHeight(x, z) + 3, z);
+    root.add(t);
+    const c = new THREE.Mesh(crownGeo, leafDark);
+    c.position.set(x, sampleHeight(x, z) + 7.4, z);
+    root.add(c);
+  }
+
+  // Suburb houses in a ring around downtown
+  const homes = low ? 22 : 40;
+  for (let i = 0; i < homes; i++) {
+    const ang = (i / homes) * Math.PI * 2;
+    const rad = WORLD.suburbs.inner + 40 + (i % 5) * 28;
+    const x = WORLD.suburbs.x + Math.cos(ang) * rad;
+    const z = WORLD.suburbs.z + Math.sin(ang) * rad;
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(10, 6, 8), houseMat[i % 3]);
+    body.position.y = 3;
+    g.add(body);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(8, 4, 4), roofMat);
+    roof.position.y = 8;
+    roof.rotation.y = Math.PI / 4;
+    g.add(roof);
+    g.position.set(x, sampleHeight(x, z), z);
+    g.rotation.y = ang + Math.PI / 2;
+    root.add(g);
+  }
+
+  // Downtown extras: plaza, water tower, billboard, parked cars
+  const plaza = new THREE.Mesh(new THREE.CircleGeometry(28, 24), makeFarLambert(0x8a8a92));
+  plaza.rotation.x = -Math.PI / 2;
+  plaza.position.set(WORLD.city.x, 0.5, WORLD.city.z);
+  root.add(plaza);
+  const tower = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 4.2, 22, 10), makeFarLambert(0xb0b8c4));
+  tower.position.set(WORLD.city.x + 70, 11, WORLD.city.z - 40);
+  root.add(tower);
+  const tank = new THREE.Mesh(new THREE.SphereGeometry(6, 12, 8), makeFarLambert(0xc45a4a));
+  tank.position.set(WORLD.city.x + 70, 24, WORLD.city.z - 40);
+  root.add(tank);
+  const board = new THREE.Mesh(new THREE.BoxGeometry(18, 8, 0.6), makeFarLambert(0xffcc44));
+  board.position.set(WORLD.city.x - 40, 10, WORLD.city.z + 90);
+  root.add(board);
+
+  const carMat = [0x3a6ad8, 0xd84a3a, 0xf2f2f0, 0x2a2a30];
+  for (let i = 0; i < (low ? 6 : 12); i++) {
+    const car = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.1, 4.4), makeFarLambert(carMat[i % 4]));
+    const ang = i * 0.7;
+    car.position.set(WORLD.city.x + Math.cos(ang) * 36, 0.9, WORLD.city.z + Math.sin(ang) * 36);
+    car.rotation.y = ang;
+    root.add(car);
+  }
+
+  // Farm: barn, silo, fence posts on north flat
+  const farm = WORLD.flats[0];
+  const barn = new THREE.Mesh(new THREE.BoxGeometry(18, 10, 14), makeFarLambert(0xb43a32));
+  barn.position.set(farm.x - 18, sampleHeight(farm.x, farm.z) + 5, farm.z);
+  root.add(barn);
+  const silo = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 3.4, 16, 10), makeFarLambert(0xc9c4b8));
+  silo.position.set(farm.x - 30, sampleHeight(farm.x, farm.z) + 8, farm.z + 8);
+  root.add(silo);
+
+  // Pier on lake
+  const pier = new THREE.Mesh(new THREE.BoxGeometry(6, 0.6, 28), makeFarLambert(0x8a6a44));
+  pier.position.set(WORLD.lake.x - WORLD.lake.r + 20, 0.6, WORLD.lake.z);
+  root.add(pier);
+
+  // Radio mast
+  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.5, 48, 6), makeFarLambert(0x8899aa));
+  mast.position.set(140, 24, 40);
+  root.add(mast);
+
+  // Fuel farm
+  for (let i = 0; i < 3; i++) {
+    const tank2 = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, 7, 12), makeFarLambert(0xd8c45a));
+    tank2.position.set(-120 + i * 12, 3.6, 30);
+    root.add(tank2);
+  }
+
+  // Flat landing discs
+  for (const f of WORLD.flats) {
+    const disc = new THREE.Mesh(
+      new THREE.CircleGeometry(f.r * 0.92, 24),
+      makeFarLambert(0x88aa55)
+    );
+    disc.rotation.x = -Math.PI / 2;
+    disc.position.set(f.x, sampleHeight(f.x, f.z) + 0.35, f.z);
+    root.add(disc);
+  }
+}
+

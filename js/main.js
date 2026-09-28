@@ -454,6 +454,7 @@ function syncMesh() {
   if (glow) glow.material.opacity = 0.2 + flight.throttle * 0.5;
   craftMesh.traverse((o) => {
     if (o.name === 'gear') o.visible = flight.gearDown;
+    if (o.name === 'flap') o.rotation.x = (flight.flaps || 0) * 0.5;
   });
   const strobe = craftMesh.getObjectByName('navStrobe');
   const navRed = craftMesh.getObjectByName('navRed');
@@ -852,6 +853,12 @@ function loop() {
       course.pulse(ringPulse);
     }
     audio?.setFlight(flight.throttle || flight.collective || 0, flight.getSpeed(), flight.stalling, flight.onGround);
+    if (flight.onGround && !world.isOnRunway(flight.position.x, flight.position.z) && flight.getGroundSpeed() > 14) {
+      if (!loop._rumble || performance.now() - loop._rumble > 220) {
+        loop._rumble = performance.now();
+        try { navigator.vibrate?.(8); } catch (_) { /* ignore */ }
+      }
+    }
 
     for (const s of STARS) {
       const dx = flight.position.x - s.x, dy = flight.position.y - s.y, dz = flight.position.z - s.z;
