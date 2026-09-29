@@ -18,6 +18,7 @@ export const WORLD = {
   hangar: { x: -80, z: -40 },
   balloonPad: { x: 60, z: -80 },
   rocketPad: { x: 120, z: -100 },
+  wingsuitRack: { x: -52, z: -18 },
   mountains: [
     { x: -900, z: -800, h: 420, r: 350 },
     { x: 1100, z: 700, h: 380, r: 300 },
@@ -51,6 +52,7 @@ export const LANDMARKS = [
   { id: 'city', name: 'CITY', x: -500, z: 400 },
   { id: 'npeak', name: 'PEAK', x: -200, z: 1100 },
   { id: 'wpeak', name: 'WEST', x: -900, z: -800 },
+  { id: 'suit', name: 'SUIT', x: -52, z: -18 },
   { id: 'balloon', name: 'BAL', x: 60, z: -80 },
   { id: 'forest', name: 'WOODS', x: 280, z: 720 },
   { id: 'farm', name: 'FARM', x: 80, z: 520 },

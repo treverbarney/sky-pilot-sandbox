@@ -295,6 +295,7 @@ function wireButtons() {
   document.getElementById('btn-bike')?.addEventListener('click', () => spawnVehicle('bike'));
   document.getElementById('btn-car')?.addEventListener('click', () => spawnVehicle('car'));
   document.getElementById('btn-exit-veh')?.addEventListener('click', () => exitVehicle());
+  document.getElementById('btn-deploy')?.addEventListener('click', () => deployCanopy());
   document.getElementById('btn-board')?.addEventListener('click', () => boardNearest());
   document.getElementById('btn-walk-ramp')?.addEventListener('click', () => {
     beginWalk(new THREE.Vector3(WORLD.hangar.x + 20, 2, WORLD.hangar.z + 20));
@@ -323,6 +324,12 @@ function wireButtons() {
       if (gameMode === 'walk') boardNearest();
       else if (gameMode === 'vehicle') exitVehicle();
       else if (gameMode === 'flight' && flight?.onGround && flight.getSpeed() < 8) exitToWalk();
+    }
+    if (e.code === 'Space' || e.code === 'KeyC') {
+      if (gameMode === 'skydive' || gameMode === 'wingsuit') {
+        e.preventDefault();
+        deployCanopy();
+      }
     }
   });
 }
@@ -503,20 +510,26 @@ function tryEject() {
       exitToWalk();
       return;
     }
+    hud.toast('Too low / too fast to jump — stop first or climb');
+    return;
   }
   const pos = flight.position.clone();
   const vel = flight.velocity.clone();
   cleanupCraft();
-  modes.startParachute(pos, vel);
-  gameMode = 'chute';
-  hud.setMode('CHUTE');
+  modes.startSkydive(pos, vel);
+  gameMode = modes.mode === 'wingsuit' ? 'wingsuit' : 'skydive';
+  hud.setMode(gameMode === 'wingsuit' ? 'WINGSUIT' : 'FREEFALL');
   hud.hideChecklist();
   el.groundUi.classList.remove('hidden');
   document.getElementById('btn-bike').classList.add('hidden');
   document.getElementById('btn-car').classList.add('hidden');
   document.getElementById('btn-swoop').classList.remove('hidden');
   document.getElementById('btn-dive').classList.remove('hidden');
-  hud.toast('Canopy out — DIVE to lose height, SWOOP to flare and skim');
+  document.getElementById('btn-deploy')?.classList.remove('hidden');
+  document.getElementById('btn-board')?.classList.add('hidden');
+  hud.toast(modes.hasWingsuit
+    ? 'Wingsuit — fly your body. DEPLOY when you want the canopy'
+    : 'Freefall — TRACK/DIVE your body, then DEPLOY');
 }
 
 function tryBoardSpecial() {
@@ -546,6 +559,17 @@ function tryBoardSpecial() {
   return false;
 }
 
+function deployCanopy() {
+  if (gameMode !== 'skydive' && gameMode !== 'wingsuit') return;
+  if (!modes.deployCanopy()) return;
+  gameMode = 'chute';
+  hud.setMode('CHUTE');
+  document.getElementById('btn-deploy')?.classList.add('hidden');
+  document.getElementById('btn-swoop').classList.remove('hidden');
+  document.getElementById('btn-dive').classList.remove('hidden');
+  hud.toast('Canopy out — DIVE to build energy, SWOOP to flare and skim');
+}
+
 function onChuteLand(pos) {
   const landPos = pos.clone();
   modes.clearActive();
@@ -567,6 +591,7 @@ function beginWalk(fromPos) {
   document.getElementById('btn-bike').classList.remove('hidden');
   document.getElementById('btn-car').classList.remove('hidden');
   document.getElementById('btn-exit-veh')?.classList.add('hidden');
+  document.getElementById('btn-deploy')?.classList.add('hidden');
   document.getElementById('btn-board')?.classList.remove('hidden');
 }
 
@@ -592,6 +617,13 @@ function boardNearest() {
   const n = modes.nearestBoardable();
   if (!n) {
     hud.toast('Walk closer to a parked plane, bike, or car');
+    return;
+  }
+  if (n.kind === 'wingsuit') {
+    modes.hasWingsuit = true;
+    const dw = modes._dino?.getObjectByName('dinoWings');
+    if (dw) dw.visible = true;
+    hud.toast('Wingsuit on — JUMP from a plane and fly it, then DEPLOY');
     return;
   }
   if (n.kind === 'plane') {
@@ -690,7 +722,9 @@ function crashTip(reason = '') {
   if (r.includes('fast')) return 'ATP tip: bleed to Vref before the threshold';
   if (r.includes('gear')) return 'ATP tip: three green before flare';
   if (r.includes('water') || r.includes('ditch')) return 'ATP tip: only the amphib is rated for the lake';
-  if (r.includes('bike') || r.includes('car') || r.includes('hit') || r.includes('high-side') || r.includes('lake')) {
+  if (r.includes('pull') || r.includes('wingsuit impact') || r.includes('canopy smash')) {
+    return 'Pull higher, then dive and SWOOP late to skim';
+  }
     return 'Slow down before buildings, woods, hangar, and water';
   }
   return 'You can retry or hangar — sandbox still wants you flying';
@@ -1061,7 +1095,7 @@ function loop() {
     });
   }
 
-  if (gameMode === 'chute' || gameMode === 'vehicle' || gameMode === 'balloon' || gameMode === 'rocket' || gameMode === 'walk') {
+  if (gameMode === 'chute' || gameMode === 'vehicle' || gameMode === 'balloon' || gameMode === 'rocket' || gameMode === 'walk' || gameMode === 'skydive' || gameMode === 'wingsuit') {
     const ev = modes.update(dt, controls, world);
     if (ev?.event === 'chute_land') onChuteLand(ev.pos);
     if (ev?.event === 'walk_state') {
@@ -1080,8 +1114,14 @@ function loop() {
       _airportToast = true;
       hud.toast('Back at the airport — teleport or hangar');
     }
-    if (ev?.event === 'chute_state' && ev.skimming) {
-      hud.setMission(`SKIM ${Math.round(ev.speed)} m/s · ${ev.agl.toFixed(0)} m AGL`);
+    if (ev?.event === 'skydive_state') {
+      const tag = ev.kind === 'suit' ? 'SUIT' : 'FALL';
+      const glide = ev.glide ? ` · GR ${ev.glide.toFixed(1)}` : '';
+      hud.setMission(`${tag} ${Math.round(ev.agl)} m AGL · ${Math.round(ev.speed)} m/s${glide} · DEPLOY`);
+    }
+    if (ev?.event === 'chute_state') {
+      if (ev.opening) hud.setMission('CANOPY OPENING');
+      else if (ev.skimming) hud.setMission(`SKIM ${Math.round(ev.speed)} m/s · ${ev.agl.toFixed(0)} m AGL`);
     }
     if (ev?.event === 'crash') handleCrash(ev.reason);
     if (ev?.event === 'balloon_land') hud.toast('Balloon secured');
@@ -1109,7 +1149,7 @@ function loop() {
     const pos = modes.pos;
     const spd = modes.getSpeed();
     const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, modes.heading || 0, 0, 'YXZ'));
-    updateCamera(dt, pos, gameMode === 'rocket' || gameMode === 'balloon' ? modes.mesh?.quaternion : q, spd);
+    updateCamera(dt, pos, ['rocket', 'balloon', 'skydive', 'wingsuit'].includes(gameMode) ? modes.mesh?.quaternion : q, spd);
     hud.update(dt, {
       alt: pos.y,
       speed: spd,

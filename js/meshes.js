@@ -757,6 +757,50 @@ export function createDinoMesh() {
   armR.name = 'dinoArmR';
   addBox(g, 0.08, 0.1, 0.08, sage, 0, 1.78, 0.12);
   addBox(g, 0.06, 0.08, 0.06, sage, 0.08, 1.72, -0.05);
+  const wings = new THREE.Group();
+  wings.name = 'dinoWings';
+  wings.visible = false;
+  const membrane = makeToonPbr({
+    color: 0x3a5a6a,
+    roughness: 0.75,
+    metalness: 0.05,
+    transparent: true,
+    opacity: 0.82,
+    side: THREE.DoubleSide
+  });
+  addBox(wings, 1.7, 0.04, 0.7, membrane, 0, 1.02, 0.05);
+  addBox(wings, 0.35, 0.04, 0.85, membrane, 0, 0.55, -0.35);
+  g.add(wings);
+  return g;
+}
+
+export function createSkydiverMesh() {
+  const g = createDinoMesh();
+  g.rotation.x = 1.15;
+  const wings = g.getObjectByName('dinoWings');
+  if (wings) wings.visible = false;
+  return g;
+}
+
+export function createWingsuitFlyerMesh() {
+  const g = createDinoMesh();
+  g.rotation.x = 1.05;
+  const wings = g.getObjectByName('dinoWings');
+  if (wings) wings.visible = true;
+  wings.scale.set(1.35, 1, 1.15);
+  return g;
+}
+
+export function createWingsuitRackMesh() {
+  const g = new THREE.Group();
+  g.name = 'suitRack';
+  addBox(g, 0.12, 2.4, 0.12, makeFarLambert(0x6a5a44), -0.7, 1.2, 0);
+  addBox(g, 0.12, 2.4, 0.12, makeFarLambert(0x6a5a44), 0.7, 1.2, 0);
+  addBox(g, 1.7, 0.1, 0.1, makeFarLambert(0x4a3a2a), 0, 2.35, 0);
+  const suit = makeToonPbr({ color: 0x2a4a58, roughness: 0.7, metalness: 0.08, side: THREE.DoubleSide });
+  addBox(g, 1.35, 0.06, 0.7, suit, 0, 1.55, 0.05);
+  addBox(g, 0.35, 0.9, 0.28, makeFarLambert(0x88a494), 0, 1.35, 0.05);
+  addBox(g, 0.22, 0.22, 0.22, makeFarLambert(0x88a494), 0, 1.95, 0.12);
   return g;
 }
 

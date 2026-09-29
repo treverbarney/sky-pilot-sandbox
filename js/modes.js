@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import {
   createParachuteMesh, createMotorcycleMesh, createSupercarMesh,
-  createBalloonMesh, createRocketMesh, createDinoMesh, createAircraftMesh
+  createBalloonMesh, createRocketMesh, createDinoMesh, createAircraftMesh,
+  createSkydiverMesh, createWingsuitFlyerMesh, createWingsuitRackMesh
 } from './meshes.js';
 import { sampleHeight, WORLD, WIND } from './world.js';
 import { weather } from './weather.js';
@@ -11,7 +12,7 @@ import { AIRCRAFT } from './aircraft-data.js';
 export class ModeManager {
   constructor(scene) {
     this.scene = scene;
-    this.mode = 'none'; // none | parachute | bike | car | balloon | rocket | walk
+    this.mode = 'none'; // none | parachute | bike | car | balloon | rocket | walk | skydive | wingsuit
     this.mesh = null;
     this.pos = new THREE.Vector3();
     this.vel = new THREE.Vector3();
@@ -21,8 +22,13 @@ export class ModeManager {
     this.rocketPhase = 'pad';
     this.rocketThrottle = 0;
     this.alive = true;
+    this.hasWingsuit = false;
+    this._openT = 0;
     this._balloon = null;
     this._rocket = null;
+    this._dino = null;
+    this._ramp = null;
+    this._suitRack = null;
     this._dino = null;
     this._ramp = null;
     this._parkedBike = null;
@@ -54,6 +60,9 @@ export class ModeManager {
       this._ramp.add(m);
     });
     this.scene.add(this._ramp);
+    this._suitRack = createWingsuitRackMesh();
+    this._suitRack.position.set(WORLD.wingsuitRack.x, 0, WORLD.wingsuitRack.z);
+    this.scene.add(this._suitRack);
   }
 
   clearActive() {
@@ -82,14 +91,38 @@ export class ModeManager {
   }
 
   startParachute(fromPos, fromVel) {
+    const keepSuit = this.hasWingsuit;
     this.clearActive();
+    this.hasWingsuit = keepSuit;
     this.mode = 'parachute';
     this.mesh = createParachuteMesh();
     this.pos.copy(fromPos);
-    this.vel.copy(fromVel).multiplyScalar(0.3);
-    this.vel.y = Math.min(this.vel.y, -5);
+    this.vel.copy(fromVel);
+    this.vel.multiplyScalar(0.72);
+    this.vel.y = Math.min(this.vel.y, -8);
+    this._openT = 0;
     this.mesh.position.copy(this.pos);
     this.scene.add(this.mesh);
+  }
+
+  startSkydive(fromPos, fromVel) {
+    const keepSuit = this.hasWingsuit;
+    this.clearActive();
+    this.hasWingsuit = keepSuit;
+    this.mode = keepSuit ? 'wingsuit' : 'skydive';
+    this.mesh = keepSuit ? createWingsuitFlyerMesh() : createSkydiverMesh();
+    this.pos.copy(fromPos);
+    this.vel.copy(fromVel);
+    if (this.vel.length() < 8) this.vel.y = Math.min(this.vel.y, -12);
+    this.heading = Math.atan2(this.vel.x || 0.01, this.vel.z || 1);
+    this.mesh.position.copy(this.pos);
+    this.scene.add(this.mesh);
+  }
+
+  deployCanopy() {
+    if (this.mode !== 'skydive' && this.mode !== 'wingsuit') return false;
+    this.startParachute(this.pos.clone(), this.vel.clone());
+    return true;
   }
 
   startVehicle(kind, fromPos) {
@@ -141,6 +174,8 @@ export class ModeManager {
     this.heading = heading;
     this.walkSpeed = 0;
     this.mesh.position.copy(this.pos);
+    const dw = this._dino.getObjectByName('dinoWings');
+    if (dw) dw.visible = !!this.hasWingsuit;
   }
 
   nearestBoardable() {
@@ -162,6 +197,9 @@ export class ModeManager {
     if (this._parkedCar && this._parkedCar.visible && this.mode === 'walk') {
       const d = Math.hypot(this.pos.x - this._parkedCar.position.x, this.pos.z - this._parkedCar.position.z);
       if (d < 7 && d < (best?.dist ?? 14)) best = { kind: 'car', id: 'car', name: 'Supercar', dist: d };
+    }
+    if (Math.hypot(this.pos.x - WORLD.wingsuitRack.x, this.pos.z - WORLD.wingsuitRack.z) < 8) {
+      best = { kind: 'wingsuit', id: 'wingsuit', name: this.hasWingsuit ? 'Wingsuit (on)' : 'Wingsuit', dist: 0 };
     }
     if (Math.hypot(this.pos.x - WORLD.balloonPad.x, this.pos.z - WORLD.balloonPad.z) < 12) {
       best = { kind: 'balloon', id: 'balloon', name: 'Balloon', dist: 0 };
@@ -198,6 +236,8 @@ export class ModeManager {
     dt = Math.min(dt, 0.05);
 
     if (this.mode === 'parachute') return this._updateChute(dt, controls, world);
+    if (this.mode === 'skydive') return this._updateSkydive(dt, controls, world);
+    if (this.mode === 'wingsuit') return this._updateWingsuit(dt, controls, world);
     if (this.mode === 'bike' || this.mode === 'car') return this._updateVehicle(dt, controls, world);
     if (this.mode === 'walk') return this._updateWalk(dt, controls, world);
     if (this.mode === 'balloon') return this._updateBalloon(dt, controls, world);
@@ -208,43 +248,53 @@ export class ModeManager {
   _updateChute(dt, controls, world) {
     const steer = controls.aileron;
     const pitch = controls.elevator;
-    this.heading += steer * 1.6 * dt;
+    this.heading += (steer + pitch * 0.15) * 1.35 * dt;
     if (weather.turb > 0.2) this.heading += Math.sin(performance.now() * 0.003) * weather.turb * 0.4 * dt;
     const fwd = new THREE.Vector3(Math.sin(this.heading), 0, Math.cos(this.heading));
     const ground = world.getHeight(this.pos.x, this.pos.z);
     const agl = this.pos.y - ground;
+    this._openT = (this._openT || 0) + dt;
+    const opening = this._openT < 1.15;
 
-    // Canopy: ~5.5 m/s sink, modest forward. Dive = front risers. Swoop = flare.
     const dive = this.dive;
     const flare = this.swoop;
-    let sink = dive ? 20 : 5.8;
-    let horiz = dive ? 26 : 9;
-    if (flare) {
-      if (agl > 70) {
-        sink = dive ? 16 : 4.2;
-        horiz = dive ? 30 : 14;
-      } else if (agl > 18) {
-        sink = 2.2;
-        horiz = 34 + Math.min(28, (70 - agl) * 0.35);
-      } else if (agl > 1.6) {
-        // Ground skim — convert leftover energy into a long fast pass
-        sink = 0.4;
-        horiz = Math.max(38, 22 + agl * 1.8);
-        this.vel.y = Math.max(this.vel.y, -1.2);
+    const energy = Math.hypot(this.vel.x, this.vel.z, Math.min(0, this.vel.y));
+
+    let sink = opening ? 18 : 5.4;
+    let horiz = opening ? Math.max(12, energy * 0.35) : 9;
+    if (!opening && dive) {
+      sink = 16 + Math.min(10, energy * 0.12);
+      horiz = 22 + Math.min(18, energy * 0.2);
+    }
+    if (!opening && flare) {
+      if (agl > 80) {
+        sink = 3.6;
+        horiz = 16;
+      } else if (agl > 22) {
+        sink = 1.6;
+        horiz = 28 + Math.min(22, energy * 0.35);
+      } else if (agl > 1.8) {
+        sink = 0.15;
+        horiz = Math.max(32, 18 + energy * 0.55 + (16 - agl) * 1.4);
+        this.vel.y = Math.max(this.vel.y, -0.8);
+      } else {
+        sink = 2.8;
+        horiz = Math.max(8, energy * 0.25);
       }
     }
-    if (dive && flare && agl > 40) {
-      sink = 24;
-      horiz = 32;
+    if (!opening && dive && flare && agl > 35) {
+      sink = 22;
+      horiz = 30;
     }
 
     const windX = (WIND?.x || weather.x || 0) * (1 + (weather.storm || 0) * 0.35);
     const windZ = (WIND?.z || weather.z || 0) * (1 + (weather.storm || 0) * 0.35);
-    this.vel.x = fwd.x * horiz + pitch * fwd.x * -5 + windX;
-    this.vel.z = fwd.z * horiz + pitch * fwd.z * -5 + windZ;
-    const lift = flare && agl < 50 ? 7 : 0;
-    const targetVy = -sink + lift;
-    this.vel.y += (targetVy - this.vel.y) * Math.min(1, 3.2 * dt);
+    const wantX = fwd.x * horiz + windX;
+    const wantZ = fwd.z * horiz + windZ;
+    this.vel.x += (wantX - this.vel.x) * Math.min(1, (opening ? 1.2 : 2.4) * dt);
+    this.vel.z += (wantZ - this.vel.z) * Math.min(1, (opening ? 1.2 : 2.4) * dt);
+    const targetVy = -sink;
+    this.vel.y += (targetVy - this.vel.y) * Math.min(1, (opening ? 1.6 : 3.0) * dt);
 
     this.pos.addScaledVector(this.vel, dt);
     const g2 = world.getHeight(this.pos.x, this.pos.z);
@@ -252,19 +302,107 @@ export class ModeManager {
     this.mesh.rotation.y = this.heading;
     this.mesh.rotation.z = -steer * 0.4;
     this.mesh.rotation.x = dive ? 0.42 : (flare ? -0.22 : 0.05);
+    const canopy = this.mesh.getObjectByName('canopy');
+    if (canopy) canopy.scale.setScalar(opening ? 0.35 + this._openT * 0.55 : 1);
 
     const speed = Math.hypot(this.vel.x, this.vel.z);
-    const skimming = flare && agl > 1.45 && agl < 16 && speed > 14;
-    const touchAgl = skimming ? 1.25 : 1.55;
-    if (this.pos.y <= g2 + touchAgl && !skimming) {
+    const skimming = flare && !opening && agl > 1.6 && agl < 18 && speed > 16;
+    if (this.pos.y <= g2 + 1.45 && !skimming) {
       this.pos.y = g2 + 1.5;
+      if (speed > 28 || this.vel.y < -9) {
+        this.alive = false;
+        return { event: 'crash', reason: 'canopy smash' };
+      }
       return { event: 'chute_land', pos: this.pos.clone() };
     }
-    if (this.pos.y < g2 + 1.2) {
-      this.pos.y = g2 + 1.5;
-      return { event: 'chute_land', pos: this.pos.clone() };
+    if (skimming && this.pos.y < g2 + 1.25) this.pos.y = g2 + 1.35;
+    return { event: 'chute_state', agl, speed, skimming, opening };
+  }
+
+  _updateSkydive(dt, controls, world) {
+    const steer = controls.aileron;
+    this.heading += steer * 1.8 * dt;
+    const fwd = new THREE.Vector3(Math.sin(this.heading), 0, Math.cos(this.heading));
+    const track = this.swoop || controls.elevator < -0.2;
+    const headDown = this.dive || controls.elevator > 0.35;
+    const g = 9.81;
+    this.vel.y -= g * dt;
+    const term = headDown ? 72 : track ? 46 : 54;
+    const drag = 9.81 / (term * term);
+    this.vel.y += -Math.sign(this.vel.y) * this.vel.y * this.vel.y * drag * dt;
+    const wantH = headDown ? 8 : track ? 28 : 12;
+    this.vel.x += (fwd.x * wantH - this.vel.x) * Math.min(1, 1.1 * dt);
+    this.vel.z += (fwd.z * wantH - this.vel.z) * Math.min(1, 1.1 * dt);
+    this.vel.x += (WIND?.x || weather.x || 0) * 0.15 * dt;
+    this.vel.z += (WIND?.z || weather.z || 0) * 0.15 * dt;
+    this.pos.addScaledVector(this.vel, dt);
+    const ground = world.getHeight(this.pos.x, this.pos.z);
+    const agl = this.pos.y - ground;
+    this.mesh.position.copy(this.pos);
+    this.mesh.rotation.y = this.heading;
+    this.mesh.rotation.x = headDown ? 1.45 : track ? 0.85 : 1.15;
+    this.mesh.rotation.z = -steer * 0.45;
+    if (agl < 2.2) {
+      this.alive = false;
+      return { event: 'crash', reason: 'no pull — impact' };
     }
-    return { event: 'chute_state', agl, speed, skimming };
+    return { event: 'skydive_state', agl, speed: this.vel.length(), kind: 'belly' };
+  }
+
+  _updateWingsuit(dt, controls, world) {
+    const steer = controls.aileron;
+    const pitch = THREE.MathUtils.clamp(controls.elevator, -1, 1);
+    this.heading += steer * (1.05 + Math.max(0, -this.vel.y) * 0.01) * dt;
+    const fwd = new THREE.Vector3(Math.sin(this.heading), 0, Math.cos(this.heading));
+    const g = 9.81;
+    const spd = Math.max(1, this.vel.length());
+    // Position: dive = more speed / sink. Flare/swoop = high Cl, more drag, flatten.
+    const flare = this.swoop || pitch < -0.25;
+    const dive = this.dive || pitch > 0.3;
+    const cl = flare ? 1.15 : dive ? 0.42 : 0.78;
+    const cd = flare ? 0.55 : dive ? 0.18 : 0.28;
+    const area = 1.15;
+    const rho = 1.2;
+    const q = 0.5 * rho * spd * spd;
+    const lift = q * cl * area;
+    const drag = q * cd * area;
+    // Lift opposite velocity-ish, biased up
+    const liftAcc = lift / 78;
+    const dragAcc = drag / 78;
+    this.vel.y -= g * dt;
+    this.vel.y += liftAcc * dt * (flare ? 1.15 : 0.72);
+    const hx = this.vel.x;
+    const hz = this.vel.z;
+    const hsp = Math.hypot(hx, hz) || 1;
+    this.vel.x -= (hx / hsp) * dragAcc * dt;
+    this.vel.z -= (hz / hsp) * dragAcc * dt;
+    const cruise = dive ? 48 : flare ? 28 : 36;
+    this.vel.x += (fwd.x * cruise - this.vel.x) * Math.min(1, 0.85 * dt);
+    this.vel.z += (fwd.z * cruise - this.vel.z) * Math.min(1, 0.85 * dt);
+    if (hsp < 16 && !dive) {
+      this.vel.y -= 8 * dt; // stall
+    }
+    if (flare && (this.pos.y - world.getHeight(this.pos.x, this.pos.z)) < 40 && hsp > 22) {
+      this.vel.y += 9 * dt;
+    }
+    this.pos.addScaledVector(this.vel, dt);
+    const ground = world.getHeight(this.pos.x, this.pos.z);
+    const agl = this.pos.y - ground;
+    this.mesh.position.copy(this.pos);
+    this.mesh.rotation.y = this.heading;
+    this.mesh.rotation.x = dive ? 1.25 : flare ? 0.55 : 0.95;
+    this.mesh.rotation.z = -steer * 0.55;
+    if (agl < 2.4) {
+      this.alive = false;
+      return { event: 'crash', reason: 'wingsuit impact' };
+    }
+    return {
+      event: 'skydive_state',
+      agl,
+      speed: this.vel.length(),
+      kind: 'suit',
+      glide: hsp / Math.max(1, -this.vel.y)
+    };
   }
 
   _updateVehicle(dt, controls, world) {

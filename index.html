@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="css/style.css?v=15" />
+  <link rel="stylesheet" href="css/style.css?v=16" />
   <title>Sky Pilot Sandbox</title>
   <!-- Vite resolves three from node_modules; for plain python -m http.server use the CDN importmap in README -->
 </head>
@@ -115,6 +115,7 @@
     <div id="ground-ui" class="hidden">
       <button type="button" id="btn-swoop" class="ctrl-btn">SWOOP</button>
       <button type="button" id="btn-dive" class="ctrl-btn">DIVE</button>
+      <button type="button" id="btn-deploy" class="ctrl-btn danger hidden">DEPLOY</button>
       <button type="button" id="btn-bike" class="ctrl-btn">🏍 BIKE</button>
       <button type="button" id="btn-car" class="ctrl-btn">🏎 CAR</button>
       <button type="button" id="btn-exit-veh" class="ctrl-btn hidden">EXIT</button>
@@ -224,6 +225,6 @@
       </div>
     </div>
   </div>
-  <script type="module" src="js/main.js?v=15"></script>
+  <script type="module" src="js/main.js?v=16"></script>
 </body>
 </html>
