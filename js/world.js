@@ -71,6 +71,7 @@ export const STARS = [
 /** Later-game landing spots — fly there when you want a new target. */
 export const LANDING_PADS = [
   { id: 'home', name: 'Home runway', x: 0, z: 0, r: 45, later: false },
+  { id: 'road-city', name: 'City highway', x: -250, z: 200, r: 28, later: true },
   { id: 'lake-beach', name: 'Lake beach', x: 420, z: -520, r: 30, later: true },
   { id: 'city-lot', name: 'City lot', x: -500, z: 400, r: 24, later: true },
   { id: 'north-shelf', name: 'North shelf', x: -180, z: 980, r: 28, later: true },
@@ -1054,18 +1055,61 @@ export function createWorld(scene, opts = {}) {
         const len = Math.hypot(dx, dz) || 1;
         const t = Math.max(0, Math.min(1, ((x - rd.ax) * dx + (z - rd.az) * dz) / (len * len)));
         const px = rd.ax + dx * t, pz = rd.az + dz * t;
-        if (Math.hypot(x - px, z - pz) < 9) return true;
+        if (Math.hypot(x - px, z - pz) < 11) return true;
       }
       return Math.abs(x) < WORLD.runway.halfW + 10 && Math.abs(z) < WORLD.runway.halfL + 12;
+    },
+    slopeAt(x, z) {
+      const h = sampleHeight(x, z);
+      const hx = sampleHeight(x + 8, z);
+      const hz = sampleHeight(x, z + 8);
+      return Math.hypot(hx - h, hz - h) / 8;
+    },
+    classifySurface(x, z) {
+      if (this.isWater(x, z)) return { id: 'water', rough: 0.15, maxClass: 'amphib' };
+      if (this.isOnRunway(x, z)) return { id: 'runway', rough: 0.02, maxClass: 'heavy' };
+      if (this.onRoad(x, z)) return { id: 'road', rough: 0.08, maxClass: 'light' };
+      for (const f of WORLD.flats || []) {
+        if (Math.hypot(x - f.x, z - f.z) < f.r) {
+          const long = f.r >= 70;
+          return { id: 'flat', name: f.name, rough: 0.12, maxClass: long ? 'heavy' : 'light', long };
+        }
+      }
+      const fx = x - WORLD.forest.x, fz = z - WORLD.forest.z;
+      const fd = Math.hypot(fx, fz) / (WORLD.forest.r || 1);
+      if (fd < 1) {
+        return { id: 'forest', rough: 0.7, dens: 1 - fd, maxClass: 'none' };
+      }
+      const sx = x - WORLD.suburbs.x, sz = z - WORLD.suburbs.z;
+      const sd = Math.hypot(sx, sz);
+      if (sd < WORLD.suburbs.outer && sd > WORLD.suburbs.inner) {
+        return { id: 'suburb', rough: 0.35, maxClass: 'heli' };
+      }
+      const sl = this.slopeAt(x, z);
+      if (sl > 0.12) return { id: 'slope', rough: 0.45 + sl, maxClass: sl > 0.22 ? 'none' : 'heli' };
+      return { id: 'grass', rough: 0.18, maxClass: 'light' };
+    },
+    forestDens(x, z) {
+      const fx = x - WORLD.forest.x, fz = z - WORLD.forest.z;
+      const fd = Math.hypot(fx, fz) / (WORLD.forest.r || 1);
+      if (fd >= 1) return 0;
+      return Math.max(0, 1 - fd);
     },
     hitSolid(x, z) {
       if (Math.hypot(x - WORLD.hangar.x, z - WORLD.hangar.z) < 22) return 'hangar';
       if (Math.hypot(x - 70, z + 30) < 10) return 'tower';
       const cx = x - WORLD.city.x, cz = z - WORLD.city.z;
       const cd = Math.hypot(cx, cz);
-      if (cd < 95 && cd > 32) return 'building';
+      if (cd < 95 && cd > 28) return 'building';
+      const sx = x - WORLD.suburbs.x, sz = z - WORLD.suburbs.z;
+      const sd = Math.hypot(sx, sz);
+      if (sd < WORLD.suburbs.outer && sd > WORLD.suburbs.inner) {
+        const ang = Math.atan2(sz, sx);
+        const slot = Math.abs((ang * 6.5) % 1 - 0.5);
+        if (slot < 0.12) return 'house';
+      }
       const fx = x - WORLD.forest.x, fz = z - WORLD.forest.z;
-      if (fx * fx + fz * fz < (WORLD.forest.r * 0.82) ** 2 && !this.onRoad(x, z)) return 'tree';
+      if (fx * fx + fz * fz < (WORLD.forest.r * 0.92) ** 2 && !this.onRoad(x, z)) return 'tree';
       if (Math.hypot(x - WORLD.city.x - 70, z - WORLD.city.z + 40) < 12) return 'water-tower';
       return null;
     },

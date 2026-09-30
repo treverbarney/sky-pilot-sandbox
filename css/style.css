@@ -1577,3 +1577,16 @@ button, input {
   pointer-events: none;
 }
 
+
+.mission-board { margin: 10px 0 16px; }
+.mission-title { font-size: 15px; margin: 0 0 4px; }
+.mission-row { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; }
+.mission-card {
+  flex: 0 0 220px; text-align: left; background: var(--bg-elev);
+  border: 1px solid var(--panel-border); color: var(--text);
+  border-radius: 10px; padding: 10px; cursor: pointer;
+}
+.mission-card strong { display: block; font-size: 13px; }
+.mission-card span { display: block; font-size: 11px; color: var(--text-secondary); margin: 4px 0; }
+.mission-card em { display: block; font-size: 10px; color: var(--accent2); font-style: normal; }
+.mission-card b { display: block; font-size: 11px; color: var(--ok); margin-top: 4px; }

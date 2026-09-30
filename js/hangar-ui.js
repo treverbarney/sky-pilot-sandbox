@@ -7,6 +7,7 @@ import {
   AIRCRAFT_INFO, DIFF_LABEL, DIFF_HINT, SILHOUETTE_SVG, getAircraftInfo
 } from './aircraft-info.js';
 import { bestFor, MEDAL, isUnlocked, licenseLocked, UNLOCK_NEED, bronzeCount } from './career.js';
+import { MISSIONS, fitLabel, loadMissionBook } from './missions.js';
 
 const HELP_SEEN_KEY = 'sky-pilot-help-seen-v1';
 
@@ -254,4 +255,23 @@ export function wireHelp(helpEl, openBtn, closeBtns = []) {
 export function displayNameFor(id, fallback) {
   const info = getAircraftInfo(id);
   return info?.shortName || fallback || id;
+}
+
+export function buildMissionBoard(el, { onPick } = {}) {
+  if (!el) return;
+  const book = loadMissionBook();
+  el.innerHTML = '<h2 class="mission-title">Jobs</h2><p class="hint dim">Not rings. Land the place. BEST is a hint.</p>';
+  const row = document.createElement('div');
+  row.className = 'mission-row';
+  for (const m of MISSIONS) {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'mission-card';
+    const best = m.best.map((id) => getAircraftInfo(id)?.shortName || id).join(', ');
+    const rec = book[m.id];
+    card.innerHTML = `<strong>${m.name}</strong><span>${m.brief}</span><em>BEST · ${best}</em>${rec ? `<b>${rec.points}/100</b>` : ''}`;
+    card.addEventListener('click', () => onPick?.(m.id));
+    row.appendChild(card);
+  }
+  el.appendChild(row);
 }

@@ -8,7 +8,8 @@ import { Controls } from './controls.js';
 import { ModeManager } from './modes.js';
 import { Effects } from './effects.js';
 import { HUD } from './hud.js';
-import { buildHangarGrid, openInfoSheet, fillHelpModal, wireHelp, displayNameFor } from './hangar-ui.js';
+import { buildHangarGrid, openInfoSheet, fillHelpModal, wireHelp, displayNameFor, buildMissionBoard } from './hangar-ui.js';
+import { missionById, fitLabel, saveMissionResult } from './missions.js';
 import { Checklist } from './checklist.js';
 import { GameAudio } from './audio.js';
 import { FlightCourse } from './course.js';
@@ -43,6 +44,8 @@ let checklistStatus = null;
 let flight = null;
 let craftMesh = null;
 let currentSpec = null;
+let pendingMission = null;
+let activeMission = null;
 let gameMode = 'menu'; // menu | flight | chute | vehicle | balloon | rocket | crash | landed | ground
 let orbitAng = 0;
 let clock = new THREE.Clock();
@@ -213,6 +216,14 @@ function setupHangarAndHelp() {
     onInfo: (id) => openInfoSheet(el.infoSheet, id, {
       onFly: (fid) => startFlight(fid)
     })
+  });
+  buildMissionBoard(document.getElementById('mission-board'), {
+    onPick: (id) => {
+      pendingMission = missionById(id);
+      const best = pendingMission.best.map((a) => displayNameFor(a, a)).join(', ');
+      hud?.toast?.(`${pendingMission.name} — pick a ship. BEST: ${best}`);
+      if (el.status) el.status.textContent = `${pendingMission.name}: ${pendingMission.brief}`;
+    }
   });
 }
 
@@ -443,6 +454,16 @@ function startFlight(id, opts = {}) {
     checklist.setPhase('cruise');
     flight.airborneTime = 5;
   }
+  if (pendingMission) {
+    activeMission = pendingMission;
+    pendingMission = null;
+    if (activeMission.wx) {
+      applyWind(activeMission.wx.fromDeg, activeMission.wx.speedKt);
+      setStorm(activeMission.wx.storm || 0);
+    }
+    const fit = fitLabel(activeMission, spec.id);
+    hud.toast(`${activeMission.name} · ${fit} · ${activeMission.brief}`, 4);
+  }
   gameMode = 'flight';
   _wasOnGround = true;
   paused = false;
@@ -454,9 +475,14 @@ function startFlight(id, opts = {}) {
       ? 'Energy management — spoilers for path'
       : `Taxi anywhere — rotate ~${msToKt(spec.vr).toFixed(0)} kt`;
   hud.toast(`${label} — ${tip} · sandbox: take off from here`);
-  const kind = testKindFor(spec);
-  course?.layoutFor(spec, kind);
-  hud.setMission(`${kind.toUpperCase()} 0/${course.total} rings`);
+  const kind = activeMission?.kind || testKindFor(spec);
+  if (activeMission?.noRings) {
+    course?.clear();
+    hud.setMission(activeMission.name);
+  } else {
+    course?.layoutFor(spec, kind);
+    hud.setMission(`${(activeMission?.name || kind).toUpperCase()} 0/${course.total} rings`);
+  }
 }
 
 
@@ -574,7 +600,8 @@ function onChuteLand(pos) {
   const landPos = pos.clone();
   modes.clearActive();
   beginWalk(landPos);
-  hud.toast('Dino on the ground — walk, board a plane, or grab a ride');
+  modes.parkRides(landPos, { water: false });
+  hud.toast('Rides dropped next to you — BOARD the bike or car, or AIRPORT');
 }
 
 function beginWalk(fromPos) {
@@ -605,7 +632,7 @@ function exitToWalk() {
 }
 
 function exitVehicle() {
-  if (gameMode !== 'vehicle' && modes.mode !== 'bike' && modes.mode !== 'car') return;
+  if (gameMode !== 'vehicle' && gameMode !== 'boat' && modes.mode !== 'bike' && modes.mode !== 'car' && modes.mode !== 'boat') return;
   const p = modes.pos.clone();
   p.x += Math.sin(modes.heading + 1.2) * 3;
   p.z += Math.cos(modes.heading + 1.2) * 3;
@@ -624,6 +651,14 @@ function boardNearest() {
     const dw = modes._dino?.getObjectByName('dinoWings');
     if (dw) dw.visible = true;
     hud.toast('Wingsuit on — JUMP from a plane and fly it, then DEPLOY');
+    return;
+  }
+  if (n.kind === 'boat') {
+    modes.startBoat(modes.pos.clone());
+    gameMode = 'boat';
+    hud.setMode('BOAT');
+    document.getElementById('btn-exit-veh')?.classList.remove('hidden');
+    hud.toast('Boat — throttle to shore, then hop out');
     return;
   }
   if (n.kind === 'plane') {
@@ -687,6 +722,16 @@ function showStandard(msg, fail = false) {
   showStandard._t = setTimeout(() => elStd.classList.add('hidden'), 4200);
 }
 
+function handleWreckWalk(reason) {
+  const p = flight?.position?.clone?.() || modes.pos.clone();
+  cleanupCraft();
+  beginWalk(p);
+  const wet = world?.isWater?.(p.x, p.z);
+  modes.parkRides(p, { water: !!wet });
+  hud.toast(reason || 'Walked away — rides nearby');
+  showStandard(reason || 'Airframe done. You lived.', true);
+}
+
 function handleCrash(reason) {
   if (flight && craftMesh) {
     effects.explode(flight.position.clone());
@@ -706,7 +751,7 @@ function handleCrash(reason) {
   });
   gameMode = 'crash';
   const tip = crashTip(reason);
-  el.crashMsg.textContent = `${reason || 'Impact'} · ${tip} · rings ${ringsHit}/${course?.total || 0}`;
+  el.crashMsg.textContent = `${reason || 'Impact'} · ${tip}`;
   el.crash.classList.remove('hidden');
   showFlightUI(false);
   el.groundUi.classList.add('hidden');
@@ -722,9 +767,12 @@ function crashTip(reason = '') {
   if (r.includes('fast')) return 'ATP tip: bleed to Vref before the threshold';
   if (r.includes('gear')) return 'ATP tip: three green before flare';
   if (r.includes('water') || r.includes('ditch')) return 'ATP tip: only the amphib is rated for the lake';
+  if (r.includes('building') || r.includes('hangar') || r.includes('house')) return 'Buildings end the airframe. Walk away if you can.';
+  if (r.includes('forest') || r.includes('tree')) return 'A few trees you might live. The woods will take a wing.';
   if (r.includes('pull') || r.includes('wingsuit impact') || r.includes('canopy smash')) {
     return 'Pull higher, then dive and SWOOP late to skim';
   }
+  if (r.includes('bike') || r.includes('car') || r.includes('hit') || r.includes('high-side') || r.includes('lake')) {
     return 'Slow down before buildings, woods, hangar, and water';
   }
   return 'You can retry or hangar — sandbox still wants you flying';
@@ -745,6 +793,9 @@ function handleLanding(info) {
     crashed: false
   });
   if (spec) saveBest(spec.id, result);
+  if (activeMission && spec) {
+    saveMissionResult(activeMission.id, spec.id, result.points);
+  }
   const atpFail = !!(info.standardFail || info.score?.fail || result.medal === 'none');
   const pad = world?.nearestPad?.(pos.x, pos.z);
   if (pad?.later) {
@@ -763,7 +814,13 @@ function handleLanding(info) {
   else audio?.land((info.vert || 2) < 2);
   const medalEl = document.getElementById('land-medal');
   if (medalEl) medalEl.textContent = medal === '—' ? '' : medal;
-  // Do not steal the stick — GTA sandbox stays in flight.
+  const surf = world?.classifySurface?.(pos.x, pos.z);
+  if (info.surface === 'water' || surf?.id === 'water') {
+    modes.parkRides(pos, { water: true });
+    hud.toast('Boat standing by — BOARD it to reach shore');
+  } else if (surf && surf.id !== 'runway') {
+    hud.toast(`${surf.id} landing — you can take off again if it is flat enough`);
+  }
 }
 
 function updateCamera(dt, targetPos, targetQuat, speed) {
@@ -956,7 +1013,7 @@ function loop() {
     const hints = runwayApproachHints();
     const snap = flight.getSnap({ agl, ...hints });
     checklistStatus = checklist.update(snap, hints);
-    const ev = flight.update(dt, th, water);
+    const ev = flight.update(dt, th, water, world);
     syncMesh();
     updateHudConfig();
     if (course) {
@@ -1045,6 +1102,8 @@ function loop() {
 
     if (ev?.event === 'crash') {
       handleCrash(ev.reason);
+    } else if (ev?.event === 'wreck_walk') {
+      handleWreckWalk(ev.reason);
     } else if (ev?.event === 'bounce' || ev?.event === 'rough') {
       showStandard(`ATP STANDARD: FAIL — ${ev.reason || 'unstable'} · keep flying`, true);
       effects.landingDust(flight.position.clone(), 1.1);
@@ -1095,7 +1154,7 @@ function loop() {
     });
   }
 
-  if (gameMode === 'chute' || gameMode === 'vehicle' || gameMode === 'balloon' || gameMode === 'rocket' || gameMode === 'walk' || gameMode === 'skydive' || gameMode === 'wingsuit') {
+  if (gameMode === 'chute' || gameMode === 'vehicle' || gameMode === 'balloon' || gameMode === 'rocket' || gameMode === 'walk' || gameMode === 'skydive' || gameMode === 'wingsuit' || gameMode === 'boat') {
     const ev = modes.update(dt, controls, world);
     if (ev?.event === 'chute_land') onChuteLand(ev.pos);
     if (ev?.event === 'walk_state') {
@@ -1124,7 +1183,17 @@ function loop() {
       else if (ev.skimming) hud.setMission(`SKIM ${Math.round(ev.speed)} m/s · ${ev.agl.toFixed(0)} m AGL`);
     }
     if (ev?.event === 'crash') handleCrash(ev.reason);
-    if (ev?.event === 'balloon_land') hud.toast('Balloon secured');
+    if (ev?.event === 'balloon_land') {
+      hud.toast('Balloon down — you can walk, grab a ride, or AIRPORT');
+      modes.parkRides(modes.pos.clone(), { water: world?.isWater?.(modes.pos.x, modes.pos.z) });
+      beginWalk(modes.pos.clone());
+    }
+    if (ev?.event === 'boat_beach') {
+      hud.toast('Beached — bike and car waiting');
+      modes.parkRides(ev.pos || modes.pos, { water: false });
+      beginWalk(ev.pos || modes.pos);
+    }
+    if (ev?.event === 'wreck_walk') handleWreckWalk(ev.reason);
     if (ev?.event === 'space') hud.toast('SPACE — prepare for reentry');
     if (ev?.event === 'reentry') hud.toast('REENTRY — retro burn & aim for pad!');
     if (ev?.event === 'rocket_land') {

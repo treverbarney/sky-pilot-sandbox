@@ -804,6 +804,19 @@ export function createWingsuitRackMesh() {
   return g;
 }
 
+export function createBoatMesh() {
+  const g = new THREE.Group();
+  g.name = 'boat';
+  const hull = makeToonPbr({ color: 0xd8d0c4, roughness: 0.55, metalness: 0.08 });
+  const dark = makeFarLambert(0x1a2430);
+  addBox(g, 1.8, 0.45, 4.6, hull, 0, 0.35, 0);
+  addBox(g, 1.2, 0.55, 1.4, dark, 0, 0.75, -0.4);
+  addBox(g, 0.9, 0.2, 0.9, makeFarLambert(0x88ccee), 0, 1.05, -0.15);
+  addCyl(g, 0.08, 0.1, 0.6, 8, dark, 0, 0.28, 2.1, Math.PI / 2);
+  addBox(g, 0.35, 0.12, 0.2, makeToonPbr({ color: 0xffe066, emissive: 0xffaa33, emissiveIntensity: 0.5 }), 0, 0.4, 2.25);
+  return g;
+}
+
 export function createMotorcycleMesh() {
   const g = new THREE.Group();
   const red = makeToonPbr({ color: 0xff2a22, roughness: 0.38, metalness: 0.42, envMapIntensity: 0.45 });

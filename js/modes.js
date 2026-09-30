@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import {
   createParachuteMesh, createMotorcycleMesh, createSupercarMesh,
   createBalloonMesh, createRocketMesh, createDinoMesh, createAircraftMesh,
-  createSkydiverMesh, createWingsuitFlyerMesh, createWingsuitRackMesh
+  createSkydiverMesh, createWingsuitFlyerMesh, createWingsuitRackMesh, createBoatMesh
 } from './meshes.js';
 import { sampleHeight, WORLD, WIND } from './world.js';
 import { weather } from './weather.js';
@@ -33,6 +33,7 @@ export class ModeManager {
     this._ramp = null;
     this._parkedBike = null;
     this._parkedCar = null;
+    this._parkedBoat = null;
     this.nearCraft = null;
     this.walkSpeed = 0;
     this.spawnAirportExtras();
@@ -67,7 +68,7 @@ export class ModeManager {
 
   clearActive() {
     if (this.mesh && this.mesh !== this._balloon && this.mesh !== this._rocket && this.mesh !== this._dino) {
-      if (this.mesh !== this._parkedBike && this.mesh !== this._parkedCar) {
+      if (this.mesh !== this._parkedBike && this.mesh !== this._parkedCar && this.mesh !== this._parkedBoat) {
         this.scene.remove(this.mesh);
       }
     }
@@ -149,6 +150,55 @@ export class ModeManager {
     this.mesh.position.copy(this.pos);
   }
 
+  parkRides(fromPos, opts = {}) {
+    const water = opts.water;
+    const hdg = this.heading || 0;
+    const side = (ang, dist) => ({
+      x: fromPos.x + Math.sin(hdg + ang) * dist,
+      z: fromPos.z + Math.cos(hdg + ang) * dist
+    });
+    if (water) {
+      if (!this._parkedBoat) {
+        this._parkedBoat = createBoatMesh();
+        this.scene.add(this._parkedBoat);
+      }
+      const p = side(0.4, 6);
+      this._parkedBoat.position.set(p.x, 0.4, p.z);
+      this._parkedBoat.visible = true;
+    } else {
+      if (!this._parkedBike) {
+        this._parkedBike = createMotorcycleMesh();
+        this.scene.add(this._parkedBike);
+      }
+      if (!this._parkedCar) {
+        this._parkedCar = createSupercarMesh();
+        this.scene.add(this._parkedCar);
+      }
+      const b = side(1.2, 5);
+      const c = side(-1.2, 7);
+      const hb = sampleHeight(b.x, b.z);
+      const hc = sampleHeight(c.x, c.z);
+      this._parkedBike.position.set(b.x, hb + 0.4, b.z);
+      this._parkedCar.position.set(c.x, hc + 0.4, c.z);
+      this._parkedBike.visible = true;
+      this._parkedCar.visible = true;
+    }
+  }
+
+  startBoat(fromPos) {
+    this.clearActive();
+    this.mode = 'boat';
+    if (!this._parkedBoat) {
+      this._parkedBoat = createBoatMesh();
+      this.scene.add(this._parkedBoat);
+    }
+    this.mesh = this._parkedBoat;
+    this.mesh.visible = true;
+    this.pos.set(fromPos.x, 0.5, fromPos.z);
+    this.vel.set(0, 0, 0);
+    this.mesh.position.copy(this.pos);
+  }
+
   startWalk(fromPos, heading = 0) {
     const keepBike = this.mode === 'bike' ? this.mesh : this._parkedBike;
     const keepCar = this.mode === 'car' ? this.mesh : this._parkedCar;
@@ -189,6 +239,10 @@ export class ModeManager {
           best = { kind: 'plane', id: m.userData.acId, name: m.userData.acName, dist: d };
         }
       });
+    }
+    if (this._parkedBoat && this._parkedBoat.visible && this.mode === 'walk') {
+      const d = Math.hypot(this.pos.x - this._parkedBoat.position.x, this.pos.z - this._parkedBoat.position.z);
+      if (d < 8) best = { kind: 'boat', id: 'boat', name: 'Boat', dist: d };
     }
     if (this._parkedBike && this._parkedBike.visible && this.mode === 'walk') {
       const d = Math.hypot(this.pos.x - this._parkedBike.position.x, this.pos.z - this._parkedBike.position.z);
@@ -239,6 +293,7 @@ export class ModeManager {
     if (this.mode === 'skydive') return this._updateSkydive(dt, controls, world);
     if (this.mode === 'wingsuit') return this._updateWingsuit(dt, controls, world);
     if (this.mode === 'bike' || this.mode === 'car') return this._updateVehicle(dt, controls, world);
+    if (this.mode === 'boat') return this._updateBoat(dt, controls, world);
     if (this.mode === 'walk') return this._updateWalk(dt, controls, world);
     if (this.mode === 'balloon') return this._updateBalloon(dt, controls, world);
     if (this.mode === 'rocket') return this._updateRocket(dt, controls, world);
@@ -514,7 +569,12 @@ export class ModeManager {
     if (this.pos.y < ground + 3) {
       this.pos.y = ground + 3;
       this.vel.y = Math.max(0, this.vel.y);
-      if (burn < 0.05 && Math.hypot(this.vel.x, this.vel.z) < 3) {
+      const hit = world.hitSolid?.(this.pos.x, this.pos.z);
+      if (hit === 'building' || hit === 'hangar' || hit === 'house' || hit === 'tower') {
+        this.alive = false;
+        return { event: 'crash', reason: `balloon into ${hit}` };
+      }
+      if (burn < 0.05 && Math.hypot(this.vel.x, this.vel.z) < 4) {
         return { event: 'balloon_land' };
       }
     }
@@ -620,6 +680,29 @@ export class ModeManager {
       return null;
     }
     return null;
+  }
+
+  _updateBoat(dt, controls, world) {
+    this.heading += controls.aileron * 1.1 * dt;
+    const fwd = new THREE.Vector3(Math.sin(this.heading), 0, Math.cos(this.heading));
+    let spd = Math.hypot(this.vel.x, this.vel.z);
+    if (controls.throttle > 0.02) spd = Math.min(28, spd + 18 * controls.throttle * dt);
+    else spd = Math.max(0, spd - 8 * dt);
+    this.vel.x = fwd.x * spd;
+    this.vel.z = fwd.z * spd;
+    this.pos.x += this.vel.x * dt;
+    this.pos.z += this.vel.z * dt;
+    const wet = world.isWater(this.pos.x, this.pos.z);
+    if (!wet) {
+      this.pos.y = world.getHeight(this.pos.x, this.pos.z) + 0.35;
+      if (spd < 4) return { event: 'boat_beach', pos: this.pos.clone() };
+    } else {
+      this.pos.y = 0.45;
+    }
+    this.mesh.position.copy(this.pos);
+    this.mesh.rotation.y = this.heading;
+    this.mesh.rotation.z = -controls.aileron * 0.15;
+    return { event: 'boat_state', speed: spd, wet };
   }
 
   _updateWalk(dt, controls, world) {

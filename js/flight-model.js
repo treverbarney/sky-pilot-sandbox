@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { weather } from './weather.js';
+import { sampleHeight } from './world.js';
 
 const G = 9.81;
 const RHO0 = 1.225;
@@ -237,7 +238,8 @@ export class FlightModel {
     };
   }
 
-  update(dt, terrainHeight, isWater) {
+  update(dt, terrainHeight, isWater, world) {
+    this._world = world;
     if (!this.alive) return;
     const s = this.spec;
     dt = Math.min(dt, 0.05);
@@ -416,6 +418,36 @@ export class FlightModel {
 
     this.position.addScaledVector(this.velocity, dt);
 
+    if (world && !this.onGround) {
+      const hit = world.hitSolid?.(this.position.x, this.position.z);
+      const aglNow = this.position.y - terrainHeight;
+      const gsHit = Math.hypot(this.velocity.x, this.velocity.z);
+      if (hit && aglNow < obstacleHeight(hit, s)) {
+        if (hit === 'building' || hit === 'hangar' || hit === 'tower' || hit === 'house' || hit === 'water-tower') {
+          this.alive = false;
+          return { event: 'crash', reason: `hit ${hit}` };
+        }
+        if (hit === 'tree') {
+          const dens = world.forestDens?.(this.position.x, this.position.z) || 0.4;
+          const heavy = (s.size || 1) > 1.25 || (s.mass || 0) > 8000;
+          if (dens > 0.55 || heavy && dens > 0.28) {
+            if (gsHit > 28 || this.velocity.y < -12) {
+              this.alive = false;
+              return { event: 'crash', reason: 'forest breakup' };
+            }
+            this.velocity.multiplyScalar(0.15);
+            this.velocity.y = 0;
+            this.position.y = terrainHeight + 2;
+            return { event: 'wreck_walk', reason: 'trees took the wings — you can walk' };
+          }
+          this.velocity.x *= 0.55;
+          this.velocity.z *= 0.55;
+          this.velocity.y = Math.min(this.velocity.y, -1);
+          return { event: 'rough', reason: 'clipped trees' };
+        }
+      }
+    }
+
     const contactY = terrainHeight + (s.isHeli ? 1.2 : 1.5) * (s.size || 1) * 0.5;
     if (this.position.y <= contactY) {
       this.position.y = contactY;
@@ -497,6 +529,60 @@ export class FlightModel {
   _handleGroundContact(wasGround, vert, gs, isWater) {
     const s = this.spec;
     this.onGround = true;
+    const world = this._world;
+    const surf = world?.classifySurface?.(this.position.x, this.position.z) || { id: 'grass', rough: 0.18, maxClass: 'light' };
+    const cls = landClass(s);
+    const allowed = surfaceAllows(cls, surf, s);
+
+    if (!allowed && this.airborneTime > 1.2 && vert > 0.8) {
+      if (surf.id === 'forest' || surf.id === 'suburb' || surf.maxClass === 'none') {
+        if (vert > 8 || gs > 35 || (s.size || 1) > 1.4) {
+          this.alive = false;
+          return { event: 'crash', reason: `cannot land ${surf.id}` };
+        }
+        return { event: 'wreck_walk', reason: `broke up on ${surf.id}` };
+      }
+      if (cls === 'heavy' && (surf.id === 'road' || surf.id === 'grass')) {
+        if (gs > 40 || vert > 6) {
+          this.alive = false;
+          return { event: 'crash', reason: 'too short / too rough for heavy' };
+        }
+        this.velocity.x *= 0.4;
+        this.velocity.z *= 0.4;
+        return { event: 'rough', reason: 'heavy on a short surface — ATP fail, still rolling' };
+      }
+    }
+
+    if (world && gs > 10) {
+      const look = 4 + Math.min(12, gs * 0.12);
+      const h0 = sampleHeight(this.position.x, this.position.z);
+      const h1 = sampleHeight(
+        this.position.x + Math.sin(this.euler.y) * look,
+        this.position.z + Math.cos(this.euler.y) * look
+      );
+      const bump = h1 - h0;
+      const thresh = 0.28 + (surf.rough || 0.1) * 1.4;
+      if (bump > thresh) {
+        this.velocity.y = Math.min(16, bump * 3.2 + gs * 0.05 * (s.mass > 8000 ? 1.4 : 1));
+        this.velocity.x *= 0.92;
+        this.velocity.z *= 0.92;
+        this.onGround = false;
+        this.position.y += 0.35;
+        this.euler.x -= Math.min(0.25, bump * 0.08);
+        this.quaternion.setFromEuler(this.euler);
+        return { event: 'bounce', vert: bump, gs, reason: 'hit a bump' };
+      }
+    }
+
+    let fricExtra = 0;
+    if (surf.id === 'grass' || surf.id === 'flat') fricExtra = 0.01;
+    if (surf.id === 'road') fricExtra = 0.004;
+    if (surf.rough > 0.25) {
+      this.euler.z += (Math.random() - 0.5) * surf.rough * 0.04;
+      this.velocity.x *= 1 - surf.rough * 0.015;
+      this.velocity.z *= 1 - surf.rough * 0.015;
+    }
+    this._surfFric = fricExtra;
 
     // Amphib gear UP on land = crash
     if (s.canWater && s.hasGear && !this.gearDown && this.airborneTime > 1.5 && vert > 0.5) {
@@ -559,6 +645,7 @@ export class FlightModel {
     if (this.spoilers && wasGround === false) fric *= 0.95;
     if (this.throttle < 0.05 && !this.reverse && !this.parkBrake && !this.park) fric *= 0.997;
     if (s.mass > 20000) fric *= this.brakes ? 0.98 : 0.995;
+    if (this._surfFric) fric *= (1 - this._surfFric);
     this.velocity.x *= fric;
     this.velocity.z *= fric;
 
@@ -1225,4 +1312,32 @@ export class FlightModel {
       this._goAroundClimbTime = 0;
     }
   }
+}
+
+function landClass(s) {
+  if (!s) return 'light';
+  if (s.type === 'blimp' || s.id === 'blimp') return 'balloon';
+  if (s.isHeli) return 'heli';
+  if (s.id === 'airliner' || s.id === 'cargo') return 'heavy';
+  if (s.type === 'fighter' || s.id === 'f15' || s.id === 'privatejet') return 'hot';
+  return 'light';
+}
+
+function surfaceAllows(cls, surf, spec) {
+  if (!surf) return true;
+  if (spec?.canWater && surf.id === 'water') return true;
+  if (cls === 'balloon' || cls === 'heli') {
+    return surf.id !== 'building' && surf.id !== 'forest';
+  }
+  if (cls === 'heavy') return surf.id === 'runway' || (surf.id === 'flat' && surf.long);
+  if (cls === 'hot') return surf.id === 'runway' || surf.id === 'flat' || surf.id === 'road';
+  if (surf.id === 'runway' || surf.id === 'road' || surf.id === 'flat' || surf.id === 'grass') return true;
+  return false;
+}
+
+function obstacleHeight(hit, spec) {
+  if (hit === 'building' || hit === 'hangar' || hit === 'tower' || hit === 'water-tower') return 28;
+  if (hit === 'house') return 9;
+  if (hit === 'tree') return 12 + (spec?.size || 1) * 2;
+  return 6;
 }
