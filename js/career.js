@@ -21,7 +21,10 @@ export const UNLOCK_NEED = {
   cargo: 2,
   f15: 2,
   airliner: 3,
-  area51: 4
+  area51: 4,
+  gyro: 1,
+  duster: 1,
+  blimp: 0
 };
 
 export function medalFor(points) {
@@ -44,7 +47,6 @@ export function bronzeCount() {
 }
 
 export function isUnlocked(id) {
-  // Sandbox: every airframe is flyable. Medals are licenses, not locks.
   return true;
 }
 
@@ -118,5 +120,7 @@ export function testKindFor(spec) {
   if (spec.type === 'glider' || spec.id === 'f15' || spec.id === 'area51') return 'peak';
   if (spec.id === 'airliner' || spec.id === 'cargo') return 'city';
   if (spec.isHeli) return 'hover';
+  if (spec.id === 'duster') return 'circuit';
+  if (spec.id === 'blimp' || spec.id === 'gyro') return 'circuit';
   return 'circuit';
 }

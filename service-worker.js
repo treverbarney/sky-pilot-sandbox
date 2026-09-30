@@ -1,5 +1,5 @@
 /* Sky Pilot Sandbox — network-first app shell + CDN; cache fallback offline */
-const CACHE = 'sky-pilot-sandbox-v16';
+const CACHE = 'sky-pilot-sandbox-v17';
 const SHELL = [
   './',
   './index.html',
@@ -21,6 +21,7 @@ const SHELL = [
   './js/hud.js',
   './js/materials.js',
   './js/craft-details.js',
+  './js/missions.js',
   './js/weather.js',
   './js/career.js',
   './js/audio.js'
@@ -32,62 +33,20 @@ self.addEventListener('install', (e) => {
 
 self.addEventListener('activate', (e) => {
   e.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
-    ).then(() => self.clients.claim())
+    caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())
   );
 });
 
-function isCdn(url) {
-  return (
-    url.origin.includes('jsdelivr') ||
-    url.origin.includes('unpkg') ||
-    url.origin.includes('fonts.googleapis') ||
-    url.origin.includes('fonts.gstatic') ||
-    url.pathname.includes('three')
-  );
-}
-
-/** App HTML/CSS/JS (and root) — always prefer network so hangar upgrades show */
-function isAppShell(url) {
-  if (url.origin !== self.location.origin) return false;
-  const p = url.pathname;
-  if (p.endsWith('/') || p.endsWith('/index.html') || p.endsWith('index.html')) return true;
-  if (p.includes('/css/') || p.includes('/js/') || p.includes('/assets/')) return true;
-  if (/\.(html|css|js|webmanifest)$/i.test(p)) return true;
-  return false;
-}
-
-function networkFirst(request) {
-  return fetch(request)
-    .then((res) => {
-      if (request.method === 'GET' && res.ok) {
-        const copy = res.clone();
-        caches.open(CACHE).then((c) => c.put(request, copy));
-      }
-      return res;
-    })
-    .catch(() => caches.match(request));
-}
-
 self.addEventListener('fetch', (e) => {
-  const url = new URL(e.request.url);
-  if (isCdn(url) || isAppShell(url)) {
-    e.respondWith(networkFirst(e.request));
-    return;
-  }
-  // Icons / other same-origin: cache-first, then network
+  const req = e.request;
+  if (req.method !== 'GET') return;
   e.respondWith(
-    caches.match(e.request).then(
-      (cached) =>
-        cached ||
-        fetch(e.request).then((res) => {
-          if (e.request.method === 'GET' && res.ok) {
-            const copy = res.clone();
-            caches.open(CACHE).then((c) => c.put(e.request, copy));
-          }
-          return res;
-        })
-    )
+    fetch(req)
+      .then((res) => {
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
+        return res;
+      })
+      .catch(() => caches.match(req).then((hit) => hit || caches.match('./index.html')))
   );
 });
