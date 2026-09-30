@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="css/style.css?v=18" />
+  <link rel="stylesheet" href="css/style.css?v=19" />
   <title>Sky Pilot Sandbox</title>
   <!-- Vite resolves three from node_modules; for plain python -m http.server use the CDN importmap in README -->
 </head>
@@ -201,19 +201,17 @@
     <div id="weather-sheet" class="overlay hidden">
       <div class="panel">
         <h2>Weather</h2>
-        <p id="wx-readout">6 kt from 360</p>
-        <label>Wind from (deg)</label>
-        <input id="wx-dir" type="range" min="10" max="360" step="10" value="360" />
-        <label>Wind speed (kt)</label>
-        <input id="wx-kt" type="range" min="0" max="55" step="1" value="6" />
-        <div class="menu-actions">
-          <button type="button" class="btn btn-ghost" data-storm="0">Clear</button>
-          <button type="button" class="btn btn-ghost" data-storm="1">Storm 1</button>
-          <button type="button" class="btn btn-ghost" data-storm="2">Storm 2</button>
-          <button type="button" class="btn btn-ghost" data-storm="3">Storm 3</button>
+        <p id="wx-readout">Calm · 3 kt from 360</p>
+        <p id="wx-blurb" class="hint dim">Glass air. Takeoff and landing are honest.</p>
+        <div class="wx-grid">
+          <button type="button" class="btn btn-ghost" data-wx="calm">1 Calm</button>
+          <button type="button" class="btn btn-ghost" data-wx="haze">2 Hot haze</button>
+          <button type="button" class="btn btn-ghost" data-wx="headwind">3 Headwind</button>
+          <button type="button" class="btn btn-ghost" data-wx="crosswind">4 Crosswind</button>
+          <button type="button" class="btn btn-ghost" data-wx="rain">5 Rain</button>
+          <button type="button" class="btn btn-ghost" data-wx="storm">6 Severe storm</button>
         </div>
-        <button type="button" id="wx-auto" class="btn btn-secondary">Live storm (shifts)</button>
-        <p class="hint dim">Headwind shortens the takeoff. Tailwind and Storm 3 shove the chute. IAS is what the wing feels; GS is across the ground.</p>
+        <p class="hint dim">Headwind shortens the roll. Crosswind weathervanes light gear. Rain kills brakes. Storm shears and swings. IAS is the wing; GS is the ground.</p>
         <button type="button" id="wx-close" class="btn btn-primary">Done</button>
       </div>
     </div>
@@ -225,6 +223,6 @@
       </div>
     </div>
   </div>
-  <script type="module" src="js/main.js?v=18"></script>
+  <script type="module" src="js/main.js?v=19"></script>
 </body>
 </html>

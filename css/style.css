@@ -1590,3 +1590,15 @@ button, input {
 .mission-card span { display: block; font-size: 11px; color: var(--text-secondary); margin: 4px 0; }
 .mission-card em { display: block; font-size: 10px; color: var(--accent2); font-style: normal; }
 .mission-card b { display: block; font-size: 11px; color: var(--ok); margin-top: 4px; }
+
+.wx-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 10px 0 14px;
+}
+.wx-grid .btn.on {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  color: var(--accent);
+}

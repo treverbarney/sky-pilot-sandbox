@@ -3,7 +3,7 @@ import { AIRCRAFT, getAircraft, msToKt } from './aircraft-data.js';
 import { FlightModel } from './flight-model.js';
 import { createAircraftMesh } from './meshes.js';
 import { createWorld, WORLD, sampleHeight, STARS } from './world.js';
-import { weather, updateWeather, applyWind, setStorm, setStormAuto, weatherLabel, STORM } from './weather.js';
+import { weather, updateWeather, applyWind, setStorm, setStormAuto, weatherLabel, STORM, setWeather, PRESETS, currentPreset } from './weather.js';
 import { Controls } from './controls.js';
 import { ModeManager } from './modes.js';
 import { Effects } from './effects.js';
@@ -247,28 +247,13 @@ function wireButtons() {
   document.getElementById('wx-close')?.addEventListener('click', () => {
     document.getElementById('weather-sheet')?.classList.add('hidden');
   });
-  document.getElementById('wx-dir')?.addEventListener('input', (e) => {
-    applyWind(Number(e.target.value), weather.speedKt);
-    syncWeatherUi();
-  });
-  document.getElementById('wx-kt')?.addEventListener('input', (e) => {
-    applyWind(weather.fromDeg, Number(e.target.value));
-    weather.stormAuto = false;
-    syncWeatherUi();
-  });
-  document.querySelectorAll('[data-storm]').forEach((btn) => {
+  document.querySelectorAll('[data-wx]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const lv = Number(btn.dataset.storm);
-      setStorm(lv);
+      const p = setWeather(btn.dataset.wx);
+      applyWorldWeather();
       syncWeatherUi();
-      hud?.toast?.(STORM[lv]?.label || 'Clear');
+      hud?.toast?.(`${p.label} — ${p.blurb}`);
     });
-  });
-  document.getElementById('wx-auto')?.addEventListener('click', () => {
-    setStormAuto(!weather.stormAuto);
-    if (weather.stormAuto && weather.storm === 0) setStorm(1);
-    syncWeatherUi();
-    hud?.toast?.(weather.stormAuto ? 'Storm live — wind will shift' : 'Storm hold');
   });
   document.getElementById('btn-eject')?.addEventListener('click', () => tryEject());
   document.getElementById('btn-retry')?.addEventListener('click', () => {
@@ -318,7 +303,7 @@ function wireButtons() {
   });
   document.getElementById('btn-dusk')?.addEventListener('click', () => {
     duskOn = !duskOn;
-    world?.setDusk?.(duskOn);
+    applyWorldWeather();
     document.getElementById('btn-dusk').textContent = duskOn ? 'Dusk' : 'Day';
   });
   document.getElementById('btn-pause')?.addEventListener('click', () => setPaused(true));
@@ -346,16 +331,19 @@ function wireButtons() {
 }
 
 function syncWeatherUi() {
-  const dir = document.getElementById('wx-dir');
-  const kt = document.getElementById('wx-kt');
   const lab = document.getElementById('wx-readout');
-  if (dir) dir.value = String(Math.round(weather.fromDeg) % 360 || 360);
-  if (kt) kt.value = String(Math.round(weather.speedKt));
+  const blurb = document.getElementById('wx-blurb');
   if (lab) lab.textContent = weatherLabel();
-  document.getElementById('wx-auto')?.classList.toggle('on', weather.stormAuto);
-  document.querySelectorAll('[data-storm]').forEach((b) => {
-    b.classList.toggle('on', Number(b.dataset.storm) === weather.storm);
+  if (blurb) blurb.textContent = currentPreset().blurb;
+  document.querySelectorAll('[data-wx]').forEach((b) => {
+    b.classList.toggle('on', b.dataset.wx === weather.preset);
   });
+  const top = document.getElementById('btn-weather');
+  if (top) top.textContent = currentPreset().label;
+}
+
+function applyWorldWeather() {
+  world?.setFog?.(weather.fog || 0.00018, duskOn);
 }
 
 function setPaused(on) {
@@ -949,9 +937,7 @@ function loop() {
   effects.update(dt);
   world?.update?.(dt);
   updateWeather(dt);
-  if (world?.setDusk && weather.storm >= 2 && !duskOn) {
-    scene.fog = new THREE.FogExp2(0x6a7aa0, STORM[weather.storm].fog);
-  }
+  applyWorldWeather();
   // FPS governor → auto Low
   _fpsAcc += dt; _fpsFrames++;
   if (_fpsAcc >= 1) {

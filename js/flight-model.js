@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { weather } from './weather.js';
+import { weather, windAt } from './weather.js';
 import { sampleHeight } from './world.js';
 
 const G = 9.81;
@@ -161,12 +161,14 @@ export class FlightModel {
   getSpeed() { return this.velocity.length(); }
   getGroundSpeed() { return Math.hypot(this.velocity.x, this.velocity.z); }
   getAirspeed() {
-    const ax = this.velocity.x - (weather.x || 0);
-    const az = this.velocity.z - (weather.z || 0);
+    const w = windAt(this.position.y);
+    const ax = this.velocity.x - (w.x || 0);
+    const az = this.velocity.z - (w.z || 0);
     return Math.hypot(ax, this.velocity.y, az);
   }
   getAirHoriz() {
-    return Math.hypot(this.velocity.x - (weather.x || 0), this.velocity.z - (weather.z || 0));
+    const w = windAt(this.position.y);
+    return Math.hypot(this.velocity.x - (w.x || 0), this.velocity.z - (w.z || 0));
   }
   getAltitude() { return this.position.y; }
   getVerticalSpeed() { return this.velocity.y; }
@@ -324,8 +326,9 @@ export class FlightModel {
     this._right.set(1, 0, 0).applyQuaternion(this.quaternion);
 
     const speedGs = this.velocity.length();
-    const airX = this.velocity.x - (weather.x || 0);
-    const airZ = this.velocity.z - (weather.z || 0);
+    const wx0 = windAt(Math.max(0, this.position.y - terrainHeight));
+    const airX = this.velocity.x - (wx0.x || 0);
+    const airZ = this.velocity.z - (wx0.z || 0);
     const airY = this.velocity.y;
     const speed = Math.hypot(airX, airY, airZ);
     this._airSpeed = speed;
@@ -366,7 +369,7 @@ export class FlightModel {
 
     // Density altitude (simple)
     const alt = Math.max(0, this.position.y);
-    const rho = RHO0 * Math.exp(-alt / 8500);
+    const rho = RHO0 * Math.exp(-alt / 8500) * (weather.dens || 1);
 
     if (s.isHeli) {
       this._updateHeli(dt, speed, agl, rho, mass);
@@ -381,29 +384,41 @@ export class FlightModel {
 
     // Crosswind weathervane from live weather (do not add wind as extra accel — aero uses airspeed)
     {
-      const wx = weather.x || 0;
-      const wz = weather.z || 0;
+      const wloc = windAt(agl);
+      const wx = wloc.x || 0;
+      const wz = wloc.z || 0;
       const cross = wx * Math.cos(this.euler.y) - wz * Math.sin(this.euler.y);
-      const ws = (s.windSense ?? 0.5) * (1 + (weather.turb || 0) * 0.6);
+      const head = -(wx * Math.sin(this.euler.y) + wz * Math.cos(this.euler.y));
+      const ws = (s.windSense ?? 0.5) * (1 + (weather.turb || 0) * 0.7);
       if (!this.onGround && !s.isHeli) {
-        this.euler.z += cross * ws * 0.012 * dt;
-        this.euler.y += cross * ws * 0.006 * dt;
-        if (weather.turb > 0.2) {
-          this.euler.z += Math.sin(performance.now() * 0.004 + this._dutchPhase) * weather.turb * 0.25 * dt;
-          this.euler.x += Math.cos(performance.now() * 0.003) * weather.turb * 0.12 * dt;
+        this.euler.z += cross * ws * 0.014 * dt;
+        this.euler.y += cross * ws * 0.007 * dt;
+        if (weather.turb > 0.15) {
+          this.euler.z += Math.sin(performance.now() * 0.004 + this._dutchPhase) * weather.turb * 0.28 * dt;
+          this.euler.x += Math.cos(performance.now() * 0.003) * weather.turb * 0.14 * dt;
+        }
+        if ((weather.shear || 0) > 0.3 && agl < 40 && agl > 4) {
+          this.velocity.y -= weather.shear * 1.8 * dt * (s.mass < 3000 ? 1.4 : 0.7);
         }
       }
-      if (this.onGround && !s.isHeli && spdNow > 3) {
+      if (this.onGround && !s.isHeli && spdNow > 2) {
         const wv = s.weathervane ?? 0.5;
-        const lightBoost = (s.mass < 2500 || s.type === 'glider' || s.snappy) ? 1.3 : 1.0;
-        this.euler.y += cross * wv * 0.018 * lightBoost * dt * Math.min(1, spdNow / 18);
-        if ((s.id === 'cessna182' || (s.diff === 'easy' && s.type === 'prop') || s.snappy) && spdNow > 12) {
-          this.euler.z += Math.sign(cross || 1) * ws * 0.09 * dt * Math.min(1, (spdNow - 12) / 22);
-          if (Math.abs(this.euler.z) > 0.9 && spdNow > 16) {
+        const lightBoost = (s.mass < 2500 || s.type === 'glider' || s.snappy || s.id === 'gyro' || s.id === 'blimp') ? 1.45 : 1.0;
+        this.euler.y += cross * wv * 0.022 * lightBoost * dt * Math.min(1.2, spdNow / 16);
+        const drift = cross * (s.mass < 2500 ? 0.35 : 0.12) * dt;
+        this.velocity.x += Math.cos(this.euler.y) * drift;
+        this.velocity.z -= Math.sin(this.euler.y) * drift;
+        if (head < -4 && this.throttle > 0.7 && this.airborneTime < 0.2) {
+          this.velocity.x += Math.sin(this.euler.y) * 0.4 * dt;
+          this.velocity.z += Math.cos(this.euler.y) * 0.4 * dt;
+        }
+        if ((s.id === 'cessna182' || s.id === 'gyro' || s.id === 'duster' || s.snappy) && spdNow > 10) {
+          this.euler.z += Math.sign(cross || 1) * ws * 0.1 * dt * Math.min(1, (spdNow - 10) / 20);
+          if (Math.abs(this.euler.z) > 0.85 && spdNow > 14 && Math.abs(cross) > 6) {
             this.euler.z *= 0.4;
             this.velocity.x *= 0.55;
             this.velocity.z *= 0.55;
-            return { event: 'rough', reason: 'ground loop — standard fail, keep rolling', vert: 0, gs: spdNow };
+            return { event: 'rough', reason: 'crosswind ground loop — keep rolling', vert: 0, gs: spdNow };
           }
         }
       }
@@ -623,6 +638,12 @@ export class FlightModel {
         this.position.y += 0.6;
         return { event: 'bounce', vert, gs, score, standardFail: true };
       }
+      if ((weather.gustKt || 0) > 8 && !wasGround && gs > 12 && Math.random() < 0.35 + weather.gustKt * 0.01) {
+        this.velocity.y = 1.4 + weather.gustKt * 0.08;
+        this.onGround = false;
+        this.position.y += 0.4;
+        return { event: 'bounce', vert, gs, score, reason: 'gust on the mains' };
+      }
     }
 
     this.velocity.y = Math.max(0, this.velocity.y);
@@ -646,6 +667,10 @@ export class FlightModel {
     if (this.throttle < 0.05 && !this.reverse && !this.parkBrake && !this.park) fric *= 0.997;
     if (s.mass > 20000) fric *= this.brakes ? 0.98 : 0.995;
     if (this._surfFric) fric *= (1 - this._surfFric);
+    if (weather.wet > 0.2) {
+      const slip = 0.012 + weather.wet * 0.03;
+      fric = Math.min(0.998, fric + slip * (this.brakes ? 0.7 : 0.35));
+    }
     this.velocity.x *= fric;
     this.velocity.z *= fric;
 
@@ -1141,9 +1166,10 @@ export class FlightModel {
 
     this._force.addScaledVector(this._fwd, thrustMag);
 
-    const airX = this.velocity.x - (weather.x || 0);
+    const wloc = windAt(agl);
+    const airX = this.velocity.x - (wloc.x || 0);
     const airY = this.velocity.y;
-    const airZ = this.velocity.z - (weather.z || 0);
+    const airZ = this.velocity.z - (wloc.z || 0);
     const airSpd = Math.hypot(airX, airY, airZ);
 
     // Aerodynamics vs air mass (IAS, not groundspeed)
@@ -1269,6 +1295,10 @@ export class FlightModel {
     }
 
     this._force.addScaledVector(this._up, lift);
+
+    const wH = windAt(agl);
+    this._force.x += (wH.x || 0) * mass * 0.11;
+    this._force.z += (wH.z || 0) * mass * 0.11;
 
     // Torque yaw bias when collective high (counter with rudder)
     this.euler.y += (this.collective - 0.45) * 0.35 * dt;

@@ -1117,6 +1117,10 @@ export function createWorld(scene, opts = {}) {
       scene.background = new THREE.Color(on ? 0x2a3a68 : 0x6ec8ff);
       scene.fog = new THREE.FogExp2(on ? 0x6a7aa0 : 0xb8d8f4, on ? 0.00028 : 0.00018);
     },
+    setFog(density = 0.00018, dusk = false) {
+      scene.background = new THREE.Color(dusk ? 0x2a3a68 : density > 0.00035 ? 0x8aa4b8 : 0x6ec8ff);
+      scene.fog = new THREE.FogExp2(dusk ? 0x6a7aa0 : density > 0.00035 ? 0x9aabb8 : 0xb8d8f4, density);
+    },
     /** Slow cloud drift — call from main loop */
     update(dt) {
       const t = performance.now() * 0.001;

@@ -5,7 +5,7 @@ import {
   createSkydiverMesh, createWingsuitFlyerMesh, createWingsuitRackMesh, createBoatMesh
 } from './meshes.js';
 import { sampleHeight, WORLD, WIND } from './world.js';
-import { weather } from './weather.js';
+import { weather, windAt } from './weather.js';
 import { AIRCRAFT } from './aircraft-data.js';
 
 /** Alternate play modes after eject / at pads */
@@ -342,8 +342,9 @@ export class ModeManager {
       horiz = 30;
     }
 
-    const windX = (WIND?.x || weather.x || 0) * (1 + (weather.storm || 0) * 0.35);
-    const windZ = (WIND?.z || weather.z || 0) * (1 + (weather.storm || 0) * 0.35);
+    const wP = windAt(Math.max(0, this.pos.y));
+    const windX = (wP.x || 0);
+    const windZ = (wP.z || 0);
     const wantX = fwd.x * horiz + windX;
     const wantZ = fwd.z * horiz + windZ;
     this.vel.x += (wantX - this.vel.x) * Math.min(1, (opening ? 1.2 : 2.4) * dt);
@@ -388,8 +389,9 @@ export class ModeManager {
     const wantH = headDown ? 8 : track ? 28 : 12;
     this.vel.x += (fwd.x * wantH - this.vel.x) * Math.min(1, 1.1 * dt);
     this.vel.z += (fwd.z * wantH - this.vel.z) * Math.min(1, 1.1 * dt);
-    this.vel.x += (WIND?.x || weather.x || 0) * 0.15 * dt;
-    this.vel.z += (WIND?.z || weather.z || 0) * 0.15 * dt;
+    const wFall = windAt(Math.max(0, this.pos.y));
+    this.vel.x += (wFall.x || 0) * 0.18 * dt;
+    this.vel.z += (wFall.z || 0) * 0.18 * dt;
     this.pos.addScaledVector(this.vel, dt);
     const ground = world.getHeight(this.pos.x, this.pos.z);
     const agl = this.pos.y - ground;
@@ -555,8 +557,9 @@ export class ModeManager {
     this.vel.y *= 0.985;
     this.vel.x += controls.aileron * 2.2 * dt;
     this.vel.z += controls.elevator * 2.2 * dt;
-    this.vel.x += (weather.x || 0) * 0.35 * dt;
-    this.vel.z += (weather.z || 0) * 0.35 * dt;
+    const wB = windAt(Math.max(0, this.pos.y));
+    this.vel.x += (wB.x || 0) * (0.5 + (weather.shear || 0) * 0.45) * dt;
+    this.vel.z += (wB.z || 0) * (0.5 + (weather.shear || 0) * 0.45) * dt;
     this.vel.x *= 0.975;
     this.vel.z *= 0.975;
     this.pos.addScaledVector(this.vel, dt);
