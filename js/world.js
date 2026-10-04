@@ -1691,5 +1691,275 @@ function decorateSandbox(root, qualityKey, useStd, tex) {
     disc.position.set(f.x, sampleHeight(f.x, f.z) + 0.35, f.z);
     root.add(disc);
   }
+  dressPlaces(root, useStd, low);
 }
 
+
+/**
+ * Cartoon town dressing. High-count props are instanced.
+ * House collision stays the existing narrow slot in hitSolid; yards are visual only.
+ */
+function dressPlaces(root, useStd, low) {
+  const paint = (hex) => (useStd
+    ? makeToonPbr({ color: hex, roughness: 0.55, metalness: 0.06 })
+    : makeFarLambert(hex));
+  const cream = paint(0xf6f1e4);
+  const red = paint(0xd6453d);
+  const blue = paint(0x3a7ad4);
+  const yellow = paint(0xffcc33);
+  const green = paint(0x4caf50);
+  const asphalt = paint(0x2c2c34);
+  const wood = paint(0x8a6540);
+  const white = paint(0xf4f6f8);
+  const dark = makeFarLambert(0x1c2430);
+  const glass = useStd
+    ? makeToonPbr({ color: 0x7ec8ea, emissive: 0x246888, emissiveIntensity: 0.22, roughness: 0.2, transparent: true, opacity: 0.75 })
+    : makeFarLambert(0x7ec8ea);
+  const dummy = new THREE.Object3D();
+  const cx = WORLD.city.x;
+  const cz = WORLD.city.z;
+
+  // Main street, offset from the radial roads so the corridor stays clear
+  const streetZ = cz + 62;
+  const street = new THREE.Mesh(new THREE.PlaneGeometry(280, 14), asphalt);
+  street.rotation.x = -Math.PI / 2;
+  street.position.set(cx, 0.42, streetZ);
+  root.add(street);
+  const stripe = new THREE.Mesh(
+    new THREE.PlaneGeometry(260, 0.45),
+    new THREE.MeshBasicMaterial({ color: 0xffee88 })
+  );
+  stripe.rotation.x = -Math.PI / 2;
+  stripe.position.set(cx, 0.48, streetZ);
+  root.add(stripe);
+
+  const roofs = [0xff7a3a, 0xffd24a, 0x3db8ff, 0xff5a7a, 0x7adf6a, 0xc45a4a];
+  const walls = [0xf2efe6, 0xd7e4f2, 0xf6d7c4, 0xe7e2f4];
+  for (let i = 0; i < (low ? 8 : 14); i++) {
+    const x = cx - 120 + i * 18;
+    const z = streetZ + (i % 2 === 0 ? 22 : -22);
+    if (blocksRoad(x, z, 10)) continue;
+    const h = 8 + (i % 5) * 6 + (i % 3) * 4;
+    const w = 8 + (i % 3) * 2;
+    const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, 9), paint(walls[i % walls.length]));
+    b.position.set(x, h / 2, z);
+    root.add(b);
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(w + 1.2, 1.1, 10.2), paint(roofs[i % roofs.length]));
+    cap.position.set(x, h + 0.4, z);
+    root.add(cap);
+  }
+
+  const lightN = low ? 10 : 18;
+  const poleGeo = new THREE.CylinderGeometry(0.12, 0.16, 6.2, 6);
+  const lampGeo = new THREE.SphereGeometry(0.38, 8, 6);
+  const poles = new THREE.InstancedMesh(poleGeo, dark, lightN);
+  const lamps = new THREE.InstancedMesh(
+    lampGeo,
+    new THREE.MeshStandardMaterial({ color: 0xffe8a0, emissive: 0xffcc66, emissiveIntensity: 1.4 }),
+    lightN
+  );
+  for (let i = 0; i < lightN; i++) {
+    const x = cx - 120 + i * (240 / lightN);
+    const z = streetZ + (i % 2 === 0 ? 8 : -8);
+    dummy.position.set(x, 3.1, z);
+    dummy.rotation.set(0, 0, 0);
+    dummy.scale.set(1, 1, 1);
+    dummy.updateMatrix();
+    poles.setMatrixAt(i, dummy.matrix);
+    dummy.position.set(x, 6.4, z);
+    dummy.updateMatrix();
+    lamps.setMatrixAt(i, dummy.matrix);
+  }
+  poles.instanceMatrix.needsUpdate = true;
+  lamps.instanceMatrix.needsUpdate = true;
+  root.add(poles);
+  root.add(lamps);
+
+  const carN = low ? 8 : 16;
+  const carGeo = new THREE.BoxGeometry(1.8, 0.85, 3.6);
+  const cabinGeo = new THREE.BoxGeometry(1.5, 0.55, 1.6);
+  const cars = new THREE.InstancedMesh(carGeo, white, carN);
+  const cabins = new THREE.InstancedMesh(cabinGeo, glass, carN);
+  const carCols = [0x3a6ad8, 0xd84a3a, 0xf2f2f0, 0x2a2a30, 0xffcc33, 0x4caf50];
+  for (let i = 0; i < carN; i++) {
+    const x = cx - 110 + (i % 8) * 28;
+    const z = streetZ + (i < 8 ? 5.2 : -5.2);
+    if (blocksRoad(x, z, 6)) continue;
+    dummy.position.set(x, 0.7, z);
+    dummy.rotation.set(0, i % 2 ? 0.04 : Math.PI + 0.04, 0);
+    dummy.scale.set(1, 1, 1);
+    dummy.updateMatrix();
+    cars.setMatrixAt(i, dummy.matrix);
+    cars.setColorAt(i, new THREE.Color(carCols[i % carCols.length]));
+    dummy.position.set(x, 1.25, z);
+    dummy.updateMatrix();
+    cabins.setMatrixAt(i, dummy.matrix);
+  }
+  cars.instanceMatrix.needsUpdate = true;
+  if (cars.instanceColor) cars.instanceColor.needsUpdate = true;
+  cabins.instanceMatrix.needsUpdate = true;
+  root.add(cars);
+  root.add(cabins);
+
+  // Diner, school, grain elevator. Water tower and a plain board already exist.
+  if (!blocksRoad(cx - 96, streetZ + 28, 12)) {
+    const diner = new THREE.Group();
+    diner.name = 'diner';
+    boxAt(diner, 16, 5.2, 10, cream, 0, 2.6, 0);
+    boxAt(diner, 17, 0.6, 11, red, 0, 5.4, 0);
+    boxAt(diner, 10, 2.4, 0.15, glass, 0, 2.8, 5.1);
+    boxAt(diner, 8, 2.2, 0.2, yellow, 0, 7.2, 0);
+    boxAt(diner, 1.1, 0.35, 0.12, red, -2.2, 7.2, 0.2);
+    boxAt(diner, 1.1, 0.35, 0.12, red, 0, 7.55, 0.2);
+    boxAt(diner, 1.1, 0.35, 0.12, red, 2.2, 7.2, 0.2);
+    diner.position.set(cx - 96, 0, streetZ + 28);
+    root.add(diner);
+  }
+  if (!blocksRoad(cx + 108, streetZ + 36, 14)) {
+    const school = new THREE.Group();
+    school.name = 'school';
+    boxAt(school, 28, 8, 14, cream, 0, 4, 0);
+    boxAt(school, 30, 0.7, 16, blue, 0, 8.4, 0);
+    boxAt(school, 18, 3, 0.2, glass, 0, 4.2, 7.1);
+    boxAt(school, 0.15, 10, 0.15, dark, 16, 5, 0);
+    boxAt(school, 2.2, 1.3, 0.08, yellow, 16.2, 10.2, 0);
+    school.position.set(cx + 108, 0, streetZ + 36);
+    root.add(school);
+  }
+  if (!blocksRoad(cx + 36, cz - 118, 12)) {
+    const elev = new THREE.Group();
+    elev.name = 'grainElevator';
+    cylAt(elev, 4.2, 4.6, 28, 10, cream, 0, 14, 0);
+    cylAt(elev, 5.2, 5.2, 6, 10, red, 0, 30, 0);
+    boxAt(elev, 8, 7, 10, yellow, 8, 3.5, 0);
+    boxAt(elev, 3.2, 0.5, 3.2, dark, 0, 28.2, 0);
+    elev.position.set(cx + 36, 0, cz - 118);
+    root.add(elev);
+  }
+  if (!blocksRoad(cx - 118, streetZ - 8, 10)) {
+    const bill = new THREE.Group();
+    bill.name = 'billboard';
+    cylAt(bill, 0.28, 0.35, 9, 6, dark, -6, 4.5, 0);
+    cylAt(bill, 0.28, 0.35, 9, 6, dark, 6, 4.5, 0);
+    boxAt(bill, 16, 7, 0.4, yellow, 0, 8.2, 0);
+    boxAt(bill, 14.4, 5.4, 0.12, blue, 0, 8.2, 0.28);
+    boxAt(bill, 2.2, 0.7, 0.1, white, -3, 8.6, 0.4);
+    boxAt(bill, 2.2, 0.7, 0.1, white, 0.4, 8.6, 0.4);
+    boxAt(bill, 2.2, 0.7, 0.1, red, 3.6, 8.2, 0.4);
+    bill.position.set(cx - 118, 0, streetZ - 8);
+    root.add(bill);
+  }
+
+  // Suburb yards. Only the existing hitSolid slot is a collision house.
+  const homes = low ? 22 : 40;
+  const postN = homes * 4;
+  const postGeo = new THREE.BoxGeometry(0.18, 1.15, 0.18);
+  const posts = new THREE.InstancedMesh(postGeo, white, postN);
+  const boxGeo = new THREE.BoxGeometry(0.35, 0.28, 0.45);
+  const boxes = new THREE.InstancedMesh(boxGeo, blue, homes);
+  let pi = 0;
+  for (let i = 0; i < homes; i++) {
+    const ang = (i / homes) * Math.PI * 2;
+    const rad = WORLD.suburbs.inner + 40 + (i % 5) * 28;
+    const x = WORLD.suburbs.x + Math.cos(ang) * rad;
+    const z = WORLD.suburbs.z + Math.sin(ang) * rad;
+    if (blocksRoad(x, z, 16)) continue;
+    const y = sampleHeight(x, z);
+    const yard = new THREE.Mesh(new THREE.CircleGeometry(7.2, 10), paint(i % 2 ? 0x6fbf63 : 0x8fd17a));
+    yard.rotation.x = -Math.PI / 2;
+    yard.position.set(x, y + 0.2, z);
+    root.add(yard);
+    const drive = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 8), asphalt);
+    drive.rotation.x = -Math.PI / 2;
+    drive.position.set(x + Math.cos(ang) * 6, y + 0.28, z + Math.sin(ang) * 6);
+    drive.rotation.z = -ang;
+    root.add(drive);
+    for (const [ox, oz] of [[-4.2, -3.2], [4.2, -3.2], [-4.2, 3.2], [4.2, 3.2]]) {
+      const px = x + ox * Math.cos(ang) - oz * Math.sin(ang);
+      const pz = z + ox * Math.sin(ang) + oz * Math.cos(ang);
+      dummy.position.set(px, y + 0.6, pz);
+      dummy.rotation.set(0, 0, 0);
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix();
+      if (pi < postN) posts.setMatrixAt(pi++, dummy.matrix);
+    }
+    dummy.position.set(x + Math.cos(ang) * 8.2, y + 0.7, z + Math.sin(ang) * 8.2);
+    dummy.rotation.set(0, ang, 0);
+    dummy.updateMatrix();
+    boxes.setMatrixAt(i, dummy.matrix);
+  }
+  posts.instanceMatrix.needsUpdate = true;
+  boxes.instanceMatrix.needsUpdate = true;
+  root.add(posts);
+  root.add(boxes);
+
+  // Forest trail and cabin. Extra pine sizes, skipped on roads.
+  const trailN = low ? 8 : 14;
+  for (let i = 0; i < trailN; i++) {
+    const t = i / (trailN - 1);
+    const x = WORLD.forest.x - WORLD.forest.r * 0.72 + t * WORLD.forest.r * 0.55;
+    const z = WORLD.forest.z + Math.sin(t * Math.PI) * 28;
+    if (blocksRoad(x, z, 12)) continue;
+    const pad = new THREE.Mesh(new THREE.CircleGeometry(3.4, 8), paint(0xc4a574));
+    pad.rotation.x = -Math.PI / 2;
+    pad.position.set(x, sampleHeight(x, z) + 0.25, z);
+    root.add(pad);
+  }
+  const cabinX = WORLD.forest.x - 40;
+  const cabinZ = WORLD.forest.z + 18;
+  if (!blocksRoad(cabinX, cabinZ, 14)) {
+    const cabin = new THREE.Group();
+    cabin.name = 'cabin';
+    const cy = sampleHeight(cabinX, cabinZ);
+    boxAt(cabin, 9, 4.2, 7, wood, 0, 2.1, 0);
+    boxAt(cabin, 10.4, 1.6, 8.4, red, 0, 4.8, 0);
+    boxAt(cabin, 1.4, 2.4, 0.12, dark, 0, 1.4, 3.55);
+    boxAt(cabin, 1.6, 1.4, 0.1, glass, -2.4, 2.6, 3.55);
+    cylAt(cabin, 0.35, 0.45, 2.2, 6, dark, 2.2, 5.6, 0);
+    cabin.position.set(cabinX, cy, cabinZ);
+    root.add(cabin);
+  }
+  const pineN = low ? 24 : 48;
+  const pineGeo = new THREE.ConeGeometry(2.4, 7.5, 7);
+  const pines = new THREE.InstancedMesh(pineGeo, paint(0x2f7a3a), pineN);
+  let placed = 0;
+  for (let i = 0; i < pineN * 2 && placed < pineN; i++) {
+    const ang = i * 2.399;
+    const rad = 30 + (i % 11) * (WORLD.forest.r / 14);
+    const x = WORLD.forest.x + Math.cos(ang) * rad;
+    const z = WORLD.forest.z + Math.sin(ang) * rad * 0.8;
+    if (blocksRoad(x, z, 12)) continue;
+    if (Math.hypot(x - cabinX, z - cabinZ) < 12) continue;
+    const s = 0.65 + (i % 5) * 0.18;
+    dummy.position.set(x, sampleHeight(x, z) + 3.2 * s, z);
+    dummy.rotation.set(0, ang, 0);
+    dummy.scale.set(s, s, s);
+    dummy.updateMatrix();
+    pines.setMatrixAt(placed++, dummy.matrix);
+  }
+  pines.count = placed;
+  pines.instanceMatrix.needsUpdate = true;
+  root.add(pines);
+
+  // Lake shore: chairs and a buoy. Dock already exists. No animals.
+  const shoreX = WORLD.lake.x - WORLD.lake.r - 6;
+  const shoreZ = WORLD.lake.z + 24;
+  if (!blocksRoad(shoreX, shoreZ, 10)) {
+    for (let i = 0; i < 3; i++) {
+      const chair = new THREE.Group();
+      boxAt(chair, 1.1, 0.12, 1.1, wood, 0, 0.45, 0);
+      boxAt(chair, 1.1, 0.9, 0.12, red, 0, 0.95, -0.5);
+      boxAt(chair, 0.1, 0.5, 0.1, dark, -0.45, 0.25, 0.4);
+      boxAt(chair, 0.1, 0.5, 0.1, dark, 0.45, 0.25, 0.4);
+      chair.position.set(shoreX, 0, shoreZ + i * 2.4);
+      chair.rotation.y = 0.4;
+      root.add(chair);
+    }
+  }
+  const buoy = new THREE.Group();
+  buoy.name = 'buoy';
+  cylAt(buoy, 0.7, 0.7, 1.3, 10, red, 0, 0.7, 0);
+  cylAt(buoy, 0.72, 0.72, 0.28, 10, white, 0, 0.95, 0);
+  buoy.position.set(WORLD.lake.x - WORLD.lake.r + 36, 0, WORLD.lake.z + 14);
+  root.add(buoy);
+}

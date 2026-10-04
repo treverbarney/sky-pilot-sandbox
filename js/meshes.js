@@ -593,6 +593,115 @@ function kitHeli(g, kit) {
 }
 
 /** Medium-poly readable silhouettes — unique kit per aircraft id */
+
+/** Ten extra readable mesh bits. Does not touch flight numbers. */
+function stampAirframe(g, spec, kit) {
+  const { dark, metal, accent } = kit;
+  const id = spec.id;
+  const line = (x, y, z, w) => addBox(g, w, 0.035, 0.05, dark, x, y, z);
+  if (id === 'cessna182') {
+    line(-2.1, 1.18, 0.9, 1.2); line(2.1, 1.18, 0.9, 1.2);
+    addBox(g, 0.28, 0.06, 0.35, dark, -0.85, -0.42, 0.2);
+    addBox(g, 0.28, 0.06, 0.35, dark, 0.85, -0.42, 0.2);
+    addBox(g, 0.4, 0.12, 0.06, accent, -0.48, 0.62, 0.55);
+    addSphere(g, 0.06, 6, metal, -4.1, 1.16, 0.25);
+    addSphere(g, 0.06, 6, metal, 4.1, 1.16, 0.25);
+    addBox(g, 0.03, 0.22, 0.03, metal, 0.05, 1.28, -0.1);
+    addBox(g, 0.18, 0.04, 0.22, metal, 0, 0.48, 2.35);
+    addBox(g, 0.1, 0.1, 0.08, dark, 0.42, 0.22, -1.55);
+  } else if (id === 'privatejet') {
+    line(-2.4, 0.48, 0.4, 1.6); line(2.4, 0.48, 0.4, 1.6);
+    addBox(g, 0.32, 0.18, 0.06, dark, -0.65, -0.28, 1.0);
+    addBox(g, 0.32, 0.18, 0.06, dark, 0.65, -0.28, 1.0);
+    addBox(g, 0.55, 0.16, 0.06, accent, 0.5, 0.7, 1.4);
+    addSphere(g, 0.05, 6, metal, -4.3, 0.45, 0.15);
+    addSphere(g, 0.05, 6, metal, 4.3, 0.45, 0.15);
+    addBox(g, 0.03, 0.26, 0.03, metal, 0.1, 1.05, -0.4);
+    addBox(g, 0.14, 0.04, 0.28, metal, 0, 0.28, 2.7);
+    addBox(g, 0.35, 0.05, 0.1, dark, 0, 0.9, -2.05);
+  } else if (id === 'airliner') {
+    line(-5.5, 0.4, 0.8, 2.4); line(5.5, 0.4, 0.8, 2.4);
+    addBox(g, 0.55, 0.28, 0.08, dark, -1.2, -0.6, 1.5);
+    addBox(g, 0.55, 0.28, 0.08, dark, 1.2, -0.6, -0.6);
+    addBox(g, 1.1, 0.35, 0.08, accent, 0.8, 0.95, 2.6);
+    addSphere(g, 0.07, 6, metal, -7.8, 0.42, -0.1);
+    addSphere(g, 0.07, 6, metal, 7.8, 0.42, -0.1);
+    addBox(g, 0.04, 0.32, 0.04, metal, 0.25, 1.25, 1.4);
+    addBox(g, 0.3, 0.06, 0.4, metal, 0, 0.35, 5.2);
+    addBox(g, 0.6, 0.08, 0.16, dark, 0, 1.15, -4.0);
+  } else if (id === 'f15') {
+    line(-1.6, 0.22, 0.8, 1.0); line(1.6, 0.22, 0.8, 1.0);
+    addBox(g, 0.28, 0.12, 0.22, dark, -0.4, -0.15, 0.55);
+    addBox(g, 0.28, 0.12, 0.22, dark, 0.4, -0.15, 0.55);
+    addBox(g, 0.35, 0.12, 0.06, accent, 0.3, 0.5, 1.45);
+    addSphere(g, 0.05, 6, metal, -2.5, 0.2, 0.15);
+    addSphere(g, 0.05, 6, metal, 2.5, 0.2, 0.15);
+    addBox(g, 0.03, 0.18, 0.03, metal, 0, 0.72, 1.7);
+    addBox(g, 0.16, 0.04, 0.28, metal, 0, 0.32, 2.15);
+    addBox(g, 0.4, 0.05, 0.1, dark, 0, 0.2, -2.3);
+  } else if (id === 'area51') {
+    line(-1.3, 0.2, 0.35, 1.2); line(1.3, 0.2, 0.35, 1.2);
+    addBox(g, 0.22, 0.08, 0.3, dark, -0.55, -0.08, 0.3);
+    addBox(g, 0.22, 0.08, 0.3, dark, 0.55, -0.08, 0.3);
+    addBox(g, 0.4, 0.1, 0.06, accent, 0, 0.32, 1.25);
+    addSphere(g, 0.045, 6, metal, -2.2, 0.18, -0.3);
+    addSphere(g, 0.045, 6, metal, 2.2, 0.18, -0.3);
+    addBox(g, 0.03, 0.16, 0.03, metal, 0.15, 0.38, 0.7);
+    addBox(g, 0.14, 0.04, 0.22, metal, 0, 0.14, 1.6);
+    addBox(g, 0.2, 0.06, 0.2, dark, 0, 0.24, -1.1);
+  } else if (id === 'amphibian') {
+    line(-1.8, 0.38, 0.4, 1.1); line(1.8, 0.38, 0.4, 1.1);
+    addBox(g, 0.3, 0.08, 0.25, dark, -0.7, 0.02, 0.7);
+    addBox(g, 0.3, 0.08, 0.25, dark, 0.7, 0.02, 0.7);
+    addBox(g, 0.45, 0.14, 0.06, accent, 0.35, 0.5, 1.25);
+    addSphere(g, 0.05, 6, metal, -3.3, 0.36, 0.05);
+    addSphere(g, 0.05, 6, metal, 3.3, 0.36, 0.05);
+    addBox(g, 0.03, 0.22, 0.03, metal, 0, 1.02, -0.15);
+    addBox(g, 0.22, 0.04, 0.3, metal, 0, 0.16, 2.05);
+    addBox(g, 0.16, 0.08, 0.16, dark, 0.25, 0.08, -1.3);
+  } else if (id === 'aerobatic') {
+    line(-1.4, 0.26, 0.35, 0.9); line(1.4, 0.26, 0.35, 0.9);
+    addBox(g, 0.18, 0.08, 0.16, dark, -0.35, -0.05, 0.55);
+    addBox(g, 0.18, 0.08, 0.16, dark, 0.35, -0.05, 0.55);
+    addBox(g, 0.32, 0.1, 0.06, accent, 0, 0.52, 1.0);
+    addSphere(g, 0.045, 6, metal, 0, 0.42, -1.65);
+    addBox(g, 0.03, 0.16, 0.03, metal, 0.08, 0.62, 0.35);
+    addBox(g, 0.12, 0.04, 0.18, metal, 0, 0.22, 1.65);
+    addBox(g, 0.22, 0.05, 0.08, dark, 0, 0.32, -1.15);
+    addBox(g, 0.06, 0.16, 0.06, accent, 0, 0.95, -1.35);
+  } else if (id === 'cargo') {
+    line(-2.2, 0.45, 0.6, 1.4); line(2.2, 0.45, 0.6, 1.4);
+    addBox(g, 0.4, 0.16, 0.1, dark, -1.1, -0.28, 0.35);
+    addBox(g, 0.4, 0.16, 0.1, dark, 1.1, -0.28, 0.35);
+    addBox(g, 0.8, 0.28, 0.08, accent, 0.5, 0.95, 1.7);
+    addSphere(g, 0.06, 6, metal, -4.0, 0.48, 0.05);
+    addSphere(g, 0.06, 6, metal, 4.0, 0.48, 0.05);
+    addBox(g, 0.04, 0.3, 0.04, metal, 0.15, 1.3, 0.5);
+    addBox(g, 0.28, 0.06, 0.35, metal, 0, 0.35, 2.7);
+    addBox(g, 0.3, 0.08, 0.16, dark, 0, 1.08, -2.7);
+  } else if (id === 'glider') {
+    line(-2.4, 0.24, 0.15, 1.5); line(2.4, 0.24, 0.15, 1.5);
+    addBox(g, 0.16, 0.06, 0.2, dark, 0, 0.02, 0.55);
+    addBox(g, 0.28, 0.08, 0.06, accent, 0.15, 0.36, 0.65);
+    addSphere(g, 0.04, 6, metal, -4.55, 0.22, 0.02);
+    addSphere(g, 0.04, 6, metal, 4.55, 0.22, 0.02);
+    addBox(g, 0.025, 0.16, 0.025, metal, 0, 0.5, 0.45);
+    addBox(g, 0.1, 0.03, 0.16, metal, 0, 0.22, 1.4);
+    addBox(g, 0.14, 0.04, 0.08, dark, 0, 0.3, -1.5);
+    addBox(g, 0.3, 0.03, 0.12, accent, 0, 0.26, -0.7);
+  } else if (id === 'heli') {
+    line(0.35, 0.72, 0.4, 0.08); line(-0.35, 0.72, 0.4, 0.08);
+    addBox(g, 0.22, 0.08, 0.16, dark, 0.5, 0.14, 0.85);
+    addBox(g, 0.22, 0.08, 0.16, dark, -0.5, 0.14, 0.85);
+    addBox(g, 0.32, 0.12, 0.06, accent, 0.3, 0.68, 0.95);
+    addSphere(g, 0.045, 6, metal, -0.65, 0.42, 1.05);
+    addSphere(g, 0.045, 6, metal, 0.65, 0.42, 1.05);
+    addBox(g, 0.03, 0.18, 0.03, metal, 0, 0.98, 0.55);
+    addBox(g, 0.12, 0.04, 0.16, metal, 0, 0.42, 1.35);
+    addBox(g, 0.16, 0.06, 0.12, dark, 0, 0.82, -1.85);
+  }
+}
+
 export function createAircraftMesh(spec) {
   const g = new THREE.Group();
   g.name = spec.id;
@@ -641,6 +750,7 @@ export function createAircraftMesh(spec) {
       break;
   }
 
+  stampAirframe(g, spec, kit);
   addCraftDetails(g, spec);
 
   g.scale.setScalar(scale);
