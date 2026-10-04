@@ -99,9 +99,10 @@ export class ModeManager {
     this.mesh = createParachuteMesh();
     this.pos.copy(fromPos);
     this.vel.copy(fromVel);
-    this.vel.multiplyScalar(0.72);
-    this.vel.y = Math.min(this.vel.y, -8);
+    if (this.vel.y > -4) this.vel.y = Math.min(this.vel.y, -6);
     this._openT = 0;
+    this._shocked = false;
+    this._canopyStall = 0;
     this.mesh.position.copy(this.pos);
     this.scene.add(this.mesh);
   }
@@ -303,76 +304,173 @@ export class ModeManager {
   _updateChute(dt, controls, world) {
     const steer = controls.aileron;
     const pitch = controls.elevator;
-    this.heading += (steer + pitch * 0.15) * 1.35 * dt;
-    if (weather.turb > 0.2) this.heading += Math.sin(performance.now() * 0.003) * weather.turb * 0.4 * dt;
-    const fwd = new THREE.Vector3(Math.sin(this.heading), 0, Math.cos(this.heading));
     const ground = world.getHeight(this.pos.x, this.pos.z);
     const agl = this.pos.y - ground;
     this._openT = (this._openT || 0) + dt;
     const opening = this._openT < 1.15;
+    const dive = !!(this.dive || pitch > 0.42);
+    const flare = !!(this.swoop || pitch < -0.48);
 
-    const dive = this.dive;
-    const flare = this.swoop;
-    const energy = Math.hypot(this.vel.x, this.vel.z, Math.min(0, this.vel.y));
-
-    let sink = opening ? 18 : 5.4;
-    let horiz = opening ? Math.max(12, energy * 0.35) : 9;
-    if (!opening && dive) {
-      sink = 16 + Math.min(10, energy * 0.12);
-      horiz = 22 + Math.min(18, energy * 0.2);
+    if (!this._shocked) {
+      this._shocked = true;
+      const sp = this.vel.length();
+      this._shock = Math.min(1, Math.max(0, (sp - 22) / 40));
+      if (sp > 28) this.vel.multiplyScalar(0.62);
+    } else {
+      this._shock = Math.max(0, (this._shock || 0) - dt * 1.4);
     }
-    if (!opening && flare) {
-      if (agl > 80) {
-        sink = 3.6;
-        horiz = 16;
-      } else if (agl > 22) {
-        sink = 1.6;
-        horiz = 28 + Math.min(22, energy * 0.35);
-      } else if (agl > 1.8) {
-        sink = 0.15;
-        horiz = Math.max(32, 18 + energy * 0.55 + (16 - agl) * 1.4);
-        this.vel.y = Math.max(this.vel.y, -0.8);
+
+    const w = windAt(Math.max(0, this.pos.y));
+    let ax = this.vel.x - (w.x || 0);
+    let ay = this.vel.y;
+    let az = this.vel.z - (w.z || 0);
+    let air = Math.hypot(ax, ay, az);
+    const mass = 100;
+    const area = 7.2;
+    const rho = 1.2;
+
+    this.heading += steer * (1.15 + Math.min(2.4, air / 16)) * dt;
+    const fwdX = Math.sin(this.heading);
+    const fwdZ = Math.cos(this.heading);
+
+    // Loaded carve: a hard turn at speed costs energy, it does not mint it.
+    let cl = 0.7;
+    let cd = 0.24;
+    if (opening) {
+      cl = 0.32;
+      cd = 1.15;
+    } else if ((this._canopyStall || 0) > 0) {
+      cl = 0.12;
+      cd = 1.25;
+      this._canopyStall -= dt;
+    } else if (flare && !dive) {
+      const h = Math.hypot(ax, az);
+      this._flareHold = (this._flareHold || 0) + dt;
+      // Entering a flare with an empty bank stalls. A dive you already built may plane out.
+      const banked = air > 22 || h > 18 || -ay > 12;
+      if (!banked && this._flareHold < 0.2) {
+        this._canopyStall = agl > 18 ? 2.0 : 1.2;
+        cl = 0.1;
+        cd = 1.35;
+      } else if (this._flareHold < 0.85 && banked) {
+        // Short, loaded plane-out. About 2g, not a parachute brake.
+        cl = 0.78;
+        cd = 0.11;
+      } else if (h > 14) {
+        // After the plane-out, fly the speed you have. Lift matches weight; drag spends it.
+        const qNow = 0.5 * rho * Math.max(air, 8) * Math.max(air, 8);
+        cl = Math.min(0.72, Math.max(0.22, (mass * 9.81) / (qNow * area)));
+        cd = agl < 12 ? 0.09 : 0.13;
       } else {
-        sink = 2.8;
-        horiz = Math.max(8, energy * 0.25);
+        this._canopyStall = agl > 16 ? 1.7 : 1.1;
+        cl = 0.1;
+        cd = 1.3;
       }
+    } else if (dive) {
+      // Front-riser dive: steep, and altitude turns into speed. Not a flat cruise.
+      cl = 0.12;
+      cd = 0.085;
     }
-    if (!opening && dive && flare && agl > 35) {
-      sink = 22;
-      horiz = 30;
+    if (!flare) this._flareHold = 0;
+    if (!opening && Math.abs(steer) > 0.4 && air > 14 && (this._canopyStall || 0) <= 0) {
+      cd *= 1.22;
+      cl *= 0.9;
     }
 
-    const wP = windAt(Math.max(0, this.pos.y));
-    const windX = (wP.x || 0);
-    const windZ = (wP.z || 0);
-    const wantX = fwd.x * horiz + windX;
-    const wantZ = fwd.z * horiz + windZ;
-    this.vel.x += (wantX - this.vel.x) * Math.min(1, (opening ? 1.2 : 2.4) * dt);
-    this.vel.z += (wantZ - this.vel.z) * Math.min(1, (opening ? 1.2 : 2.4) * dt);
-    const targetVy = -sink;
-    this.vel.y += (targetVy - this.vel.y) * Math.min(1, (opening ? 1.6 : 3.0) * dt);
+    if (air > 0.4) {
+      const ihx = ax / air;
+      const ihy = ay / air;
+      const ihz = az / air;
+      const q = 0.5 * rho * air * air;
+      const lift = q * area * cl;
+      const drag = q * area * cd;
+      let rx = -ihz;
+      let rz = ihx;
+      const rm = Math.hypot(rx, rz);
+      let lx, ly, lz;
+      if (rm < 1e-4) {
+        lx = fwdX; ly = 0.15; lz = fwdZ;
+      } else {
+        rx /= rm; rz /= rm;
+        lx = -rz * ihy;
+        ly = rz * ihx - rx * ihz;
+        lz = rx * ihy;
+      }
+      const lm = Math.hypot(lx, ly, lz) || 1;
+      const sUp = ly < 0 ? -1 : 1;
+      lx = sUp * lx / lm; ly = sUp * ly / lm; lz = sUp * lz / lm;
+      const liftAcc = lift / mass;
+      const dragAcc = drag / mass;
+      ax += lx * liftAcc * dt;
+      ay += (ly * liftAcc - 9.81) * dt;
+      az += lz * liftAcc * dt;
+      ax -= ihx * dragAcc * dt;
+      ay -= ihy * dragAcc * dt;
+      az -= ihz * dragAcc * dt;
+    } else {
+      ay -= 9.81 * dt;
+    }
 
+    // Canopy wants to fly along heading; a carve yaws the track instead of teleporting speed.
+    const hsp = Math.hypot(ax, az);
+    if (hsp > 0.5 && (this._canopyStall || 0) <= 0 && !opening) {
+      const want = Math.atan2(fwdX, fwdZ);
+      const have = Math.atan2(ax, az);
+      let diff = want - have;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      const yaw = Math.max(-1, Math.min(1, diff * 1.6)) * Math.min(1, hsp / 12);
+      const c = Math.cos(yaw * dt * 2.2);
+      const sn = Math.sin(yaw * dt * 2.2);
+      const nx = ax * c + az * sn;
+      const nz = -ax * sn + az * c;
+      ax = nx; az = nz;
+    }
+
+    const hNow = Math.hypot(ax, az);
+    if (flare && !dive && hNow > 15 && (this._canopyStall || 0) <= 0) {
+      if (agl > 35) ay = Math.min(ay, 2.5);
+      else if (agl > 8) ay = Math.min(ay, -2.4);
+      else ay = Math.max(-1.1, Math.min(ay, 0.35));
+    }
+    this.vel.x = ax + (w.x || 0);
+    this.vel.y = ay;
+    this.vel.z = az + (w.z || 0);
     this.pos.addScaledVector(this.vel, dt);
+
     const g2 = world.getHeight(this.pos.x, this.pos.z);
+    const agl2 = this.pos.y - g2;
     this.mesh.position.copy(this.pos);
     this.mesh.rotation.y = this.heading;
-    this.mesh.rotation.z = -steer * 0.4;
-    this.mesh.rotation.x = dive ? 0.42 : (flare ? -0.22 : 0.05);
+    this.mesh.rotation.z = -steer * (0.35 + Math.min(0.45, hsp / 40));
+    const stalled = (this._canopyStall || 0) > 0;
+    this.mesh.rotation.x = opening ? 0.15 + this._shock * 0.5 : (stalled ? 0.7 : (dive ? 0.48 : (flare ? -0.35 : 0.06)));
     const canopy = this.mesh.getObjectByName('canopy');
-    if (canopy) canopy.scale.setScalar(opening ? 0.35 + this._openT * 0.55 : 1);
+    if (canopy) {
+      const shockScale = opening ? 0.4 + this._openT * 0.5 : 1;
+      canopy.scale.setScalar(shockScale * (this._shock > 0.2 ? 0.92 : 1));
+    }
 
     const speed = Math.hypot(this.vel.x, this.vel.z);
-    const skimming = flare && !opening && agl > 1.6 && agl < 18 && speed > 16;
+    const skimming = flare && !opening && !stalled && agl2 > 0.8 && agl2 < 22 && speed > 15 && this.vel.y > -5;
     if (this.pos.y <= g2 + 1.45 && !skimming) {
       this.pos.y = g2 + 1.5;
-      if (speed > 28 || this.vel.y < -9) {
+      if (speed > 26 || this.vel.y < -8 || stalled) {
         this.alive = false;
-        return { event: 'crash', reason: 'canopy smash' };
+        return { event: 'crash', reason: stalled ? 'canopy stall — no flare energy' : 'canopy smash' };
       }
       return { event: 'chute_land', pos: this.pos.clone() };
     }
-    if (skimming && this.pos.y < g2 + 1.25) this.pos.y = g2 + 1.35;
-    return { event: 'chute_state', agl, speed, skimming, opening };
+    if (skimming && this.pos.y < g2 + 1.2) this.pos.y = g2 + 1.3;
+    return {
+      event: 'chute_state',
+      agl: agl2,
+      speed,
+      skimming,
+      opening,
+      stalled,
+      shock: this._shock || 0
+    };
   }
 
   _updateSkydive(dt, controls, world) {
@@ -409,45 +507,80 @@ export class ModeManager {
   _updateWingsuit(dt, controls, world) {
     const steer = controls.aileron;
     const pitch = THREE.MathUtils.clamp(controls.elevator, -1, 1);
-    this.heading += steer * (1.05 + Math.max(0, -this.vel.y) * 0.01) * dt;
-    const fwd = new THREE.Vector3(Math.sin(this.heading), 0, Math.cos(this.heading));
-    const g = 9.81;
-    const spd = Math.max(1, this.vel.length());
-    // Position: dive = more speed / sink. Flare/swoop = high Cl, more drag, flatten.
-    const flare = this.swoop || pitch < -0.25;
-    const dive = this.dive || pitch > 0.3;
-    const cl = flare ? 1.15 : dive ? 0.42 : 0.78;
-    const cd = flare ? 0.55 : dive ? 0.18 : 0.28;
-    const area = 1.15;
+    const dive = !!(this.dive || pitch > 0.35);
+    const flare = !!(this.swoop || pitch < -0.28);
+    this.heading += steer * (0.7 + Math.min(0.8, Math.max(0, -this.vel.y) * 0.02)) * dt;
+    const fwdX = Math.sin(this.heading);
+    const fwdZ = Math.cos(this.heading);
+    const w = windAt(Math.max(0, this.pos.y));
+    let ax = this.vel.x - (w.x || 0);
+    let ay = this.vel.y;
+    let az = this.vel.z - (w.z || 0);
+    let air = Math.max(0.001, Math.hypot(ax, ay, az));
+    const mass = 85;
+    const area = 0.66;
     const rho = 1.2;
-    const q = 0.5 * rho * spd * spd;
-    const lift = q * cl * area;
-    const drag = q * cd * area;
-    // Lift opposite velocity-ish, biased up
-    const liftAcc = lift / 78;
-    const dragAcc = drag / 78;
-    this.vel.y -= g * dt;
-    this.vel.y += liftAcc * dt * (flare ? 1.15 : 0.72);
-    const hx = this.vel.x;
-    const hz = this.vel.z;
-    const hsp = Math.hypot(hx, hz) || 1;
-    this.vel.x -= (hx / hsp) * dragAcc * dt;
-    this.vel.z -= (hz / hsp) * dragAcc * dt;
-    const cruise = dive ? 48 : flare ? 28 : 36;
-    this.vel.x += (fwd.x * cruise - this.vel.x) * Math.min(1, 0.85 * dt);
-    this.vel.z += (fwd.z * cruise - this.vel.z) * Math.min(1, 0.85 * dt);
-    if (hsp < 16 && !dive) {
-      this.vel.y -= 8 * dt; // stall
+    const stalled = air < 30 && !dive;
+    let cl = stalled ? 0.12 : (dive ? 0.42 : (flare ? 1.05 : 0.86));
+    let cd = stalled ? 0.9 : (dive ? 0.2 : (flare ? 0.62 : 0.32));
+    if (flare && air < 36) {
+      cl = 0.14;
+      cd = 0.95;
     }
-    if (flare && (this.pos.y - world.getHeight(this.pos.x, this.pos.z)) < 40 && hsp > 22) {
-      this.vel.y += 9 * dt;
+    const ihx = ax / air;
+    const ihy = ay / air;
+    const ihz = az / air;
+    const q = 0.5 * rho * air * air;
+    const lift = q * area * cl;
+    const dragF = q * area * cd;
+    let rx = -ihz;
+    let rz = ihx;
+    const rm = Math.hypot(rx, rz);
+    let lx, ly, lz;
+    if (rm < 1e-4) {
+      lx = fwdX; ly = 0; lz = fwdZ;
+    } else {
+      rx /= rm; rz /= rm;
+      lx = -rz * ihy;
+      ly = rz * ihx - rx * ihz;
+      lz = rx * ihy;
     }
+    const lm = Math.hypot(lx, ly, lz) || 1;
+    const sUp = (ly === 0 ? 1 : Math.sign(ly));
+    lx = sUp * lx / lm; ly = Math.abs(ly) / lm; lz = sUp * lz / lm;
+    ax += (lx * lift / mass) * dt;
+    ay += (ly * lift / mass - 9.81) * dt;
+    az += (lz * lift / mass) * dt;
+    ax -= ihx * (dragF / mass) * dt;
+    ay -= ihy * (dragF / mass) * dt;
+    az -= ihz * (dragF / mass) * dt;
+
+    const hsp = Math.hypot(ax, az) || 0.001;
+    if (!stalled && hsp > 8) {
+      const want = Math.atan2(fwdX, fwdZ);
+      const have = Math.atan2(ax, az);
+      let diff = want - have;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      const yaw = Math.max(-0.8, Math.min(0.8, diff));
+      const c = Math.cos(yaw * dt * 0.8);
+      const sn = Math.sin(yaw * dt * 0.8);
+      const nx = ax * c + az * sn;
+      const nz = -ax * sn + az * c;
+      ax = nx; az = nz;
+    }
+
+    this.vel.x = ax + (w.x || 0);
+    this.vel.y = ay;
+    this.vel.z = az + (w.z || 0);
     this.pos.addScaledVector(this.vel, dt);
     const ground = world.getHeight(this.pos.x, this.pos.z);
     const agl = this.pos.y - ground;
+    const horiz = Math.hypot(ax, az);
+    const sink = Math.max(0.4, -ay);
     this.mesh.position.copy(this.pos);
     this.mesh.rotation.y = this.heading;
-    this.mesh.rotation.x = dive ? 1.25 : flare ? 0.55 : 0.95;
+    this.mesh.rotation.x = dive ? 1.25 : (flare ? 0.5 : 0.95);
     this.mesh.rotation.z = -steer * 0.55;
     if (agl < 2.4) {
       this.alive = false;
@@ -458,7 +591,8 @@ export class ModeManager {
       agl,
       speed: this.vel.length(),
       kind: 'suit',
-      glide: hsp / Math.max(1, -this.vel.y)
+      glide: horiz / sink,
+      stalled: stalled || (flare && air < 36)
     };
   }
 

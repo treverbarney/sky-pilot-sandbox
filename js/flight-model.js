@@ -267,6 +267,11 @@ export class FlightModel {
     if (s.id === 'cessna182' || s.type === 'aerobatic' || s.snappy) pitchSens = 1.28;
     if (s.snappy || s.id === 'aerobatic') pitchSens = 1.42;
     if (s.id === 'airliner' || s.id === 'cargo' || s.longRoll) pitchSens = 0.82;
+    // Airliner/cargo: the nose comes up late and slowly. A fighter hung below corner loses the nose.
+    if ((s.id === 'airliner' || s.id === 'cargo' || s.longRoll) && this.onGround) pitchSens *= 0.42;
+    if ((s.type === 'fighter' || s.id === 'f15') && !this.onGround && spdNow < (s.stallSpeed || 60) * 1.28) pitchSens *= 0.62;
+    if (s.id === 'gyro' || s.type === 'gyro') pitchSens *= 1.25;
+    if (s.id === 'blimp' || s.type === 'blimp') pitchSens *= 0.32;
     if (this.onWater && s.waterPitchDamp) pitchSens *= s.waterPitchDamp;
     const pitchCmd = pitchInput * s.pitchRate * (this.onGround ? 0.5 : 1) * auth * pitchSens;
     // Light planes: strong rudder; airliner/cargo: heavy tiller (slow nosewheel)
@@ -412,6 +417,9 @@ export class FlightModel {
           this.velocity.x += Math.sin(this.euler.y) * 0.4 * dt;
           this.velocity.z += Math.cos(this.euler.y) * 0.4 * dt;
         }
+        if (s.id === 'gyro' || s.id === 'blimp' || s.type === 'gyro' || s.type === 'blimp') {
+          this.euler.y += cross * (s.id === 'blimp' || s.type === 'blimp' ? 0.08 : 0.05) * dt;
+        }
         if ((s.id === 'cessna182' || s.id === 'gyro' || s.id === 'duster' || s.snappy) && spdNow > 10) {
           this.euler.z += Math.sign(cross || 1) * ws * 0.1 * dt * Math.min(1, (spdNow - 10) / 20);
           if (Math.abs(this.euler.z) > 0.85 && spdNow > 14 && Math.abs(cross) > 6) {
@@ -424,11 +432,31 @@ export class FlightModel {
       }
     }
 
-    // Soft speed clamp near Vne
-    const vmax = s.maxSpeed || 200;
-    const spd2 = this.velocity.length();
-    if (spd2 > vmax * 1.05) {
-      this.velocity.multiplyScalar((vmax * 1.05) / spd2);
+    // Vne is indicated airspeed. A 182's limit sits far below an F-15's; wind stays in the groundspeed.
+    {
+      const vne = s.maxSpeed || 200;
+      const wV = windAt(Math.max(0, this.position.y));
+      const ax = this.velocity.x - (wV.x || 0);
+      const ay = this.velocity.y;
+      const az = this.velocity.z - (wV.z || 0);
+      const ias = Math.hypot(ax, ay, az);
+      const fighter = s.type === 'fighter' || s.id === 'f15';
+      this._vneBuffet = 0;
+      if (!s.isHeli && ias > vne * 0.86) {
+        const frac = (ias - vne * 0.86) / Math.max(1, vne * 0.14);
+        this._vneBuffet = Math.min(fighter ? 1.1 : 1.7, frac);
+        const t = performance.now() * 0.001;
+        this.euler.x += Math.sin(t * 46) * this._vneBuffet * 0.04 * dt * 28;
+        this.euler.z += Math.cos(t * 33) * this._vneBuffet * 0.032 * dt * 28;
+        this.quaternion.setFromEuler(this.euler);
+      }
+      const cap = vne * (fighter ? 1.06 : 1.02);
+      if (ias > cap && ias > 1) {
+        const k = cap / ias;
+        this.velocity.x = (wV.x || 0) + ax * k;
+        this.velocity.y = ay * k;
+        this.velocity.z = (wV.z || 0) + az * k;
+      }
     }
 
     this.position.addScaledVector(this.velocity, dt);
@@ -1146,6 +1174,7 @@ export class FlightModel {
       let grd = s.groundRollDrag ?? (s.mass > 40000 ? 0.045 : 0.02);
       if (s.shortField) grd *= 0.75;
       if (s.longRoll) grd *= 1.08;
+      if (s.id === 'airliner') grd *= 1.35;
       const velDir = this.velocity.lengthSq() > 0.01
         ? this._tmp.copy(this.velocity).normalize()
         : this._fwd;
@@ -1189,20 +1218,58 @@ export class FlightModel {
       let Cl = s.liftCoef * (0.15 + 2.8 * Math.sin(Math.max(-0.4, Math.min(0.5, aoa + 0.04))));
       Cl += this.flaps * s.flapLift;
 
-      // Stall break
+      // Stall break — light props mush, fighters depart, heavies are blunt
       const vs = this.getStallSpeed();
+      const lightProp = s.type === 'prop' || s.id === 'gyro' || s.type === 'gyro' || s.id === 'cessna182' || s.id === 'duster';
+      const fighter = s.type === 'fighter' || s.id === 'f15';
+      const glider = s.type === 'glider';
       let stallFactor = 1;
-      if (speed < vs) {
-        stallFactor = Math.max(0.12, (speed / vs) ** 2);
-        this.stalling = true;
-      } else if (Math.abs(aoa) > stallAoA) {
-        const over = (Math.abs(aoa) - stallAoA) / (8 * Math.PI / 180);
-        stallFactor = Math.max(0.2, 1 - over);
-        this.stalling = over > 0.3;
-        // Wing drop cue
-        this.euler.z += Math.sign(this.euler.z || this.aileron || 0.01) * over * 0.4 * dt;
+      if (lightProp || glider) {
+        if (speed < vs * 1.16) {
+          const depth = THREE.MathUtils.clamp((vs * 1.16 - speed) / (vs * 0.30), 0, 1);
+          stallFactor = Math.max(0.38, 1 - 0.55 * depth * depth);
+          this.stalling = speed < vs * 1.02;
+          if (this.stalling && !this.onGround) {
+            this.euler.x += (glider ? 0.62 : 0.32) * dt;
+            this.euler.z += Math.sin(performance.now() * 0.0025) * (glider ? 0.22 : 0.12) * dt;
+          }
+        } else if (Math.abs(aoa) > stallAoA) {
+          const over = (Math.abs(aoa) - stallAoA) / (12 * Math.PI / 180);
+          stallFactor = Math.max(0.42, 1 - over * 0.5);
+          this.stalling = over > 0.5;
+          if (!this.onGround && this.stalling) this.euler.x += 0.26 * dt;
+        } else {
+          this.stalling = false;
+        }
+      } else if (fighter) {
+        const overSpd = speed < vs * 1.04 ? (vs * 1.04 - speed) / vs : 0;
+        const overAoA = Math.max(0, (Math.abs(aoa) - stallAoA * 0.96) / (5 * Math.PI / 180));
+        const over = Math.max(overSpd, overAoA);
+        if (over > 0.02) {
+          stallFactor = Math.max(0.05, 1 - over * 1.45);
+          this.stalling = over > 0.12;
+          this.euler.z += Math.sign(this.euler.z || this.aileron || 0.25) * over * 1.6 * dt;
+          if (!this.onGround) this.euler.x += 1.05 * Math.min(1.2, over) * dt;
+        } else {
+          this.stalling = false;
+        }
+        // Hanging it out on approach just falls through. No Cessna float.
+        if (!this.onGround && agl < 45 && speed < vs * 1.3) {
+          this._force.y -= mass * 7.5 * (1 - speed / (vs * 1.3));
+        }
       } else {
-        this.stalling = false;
+        if (speed < vs) {
+          stallFactor = Math.max(s.id === 'airliner' ? 0.08 : 0.12, (speed / vs) ** 2);
+          this.stalling = true;
+          if (!this.onGround && s.id === 'airliner') this.euler.x += 0.45 * dt;
+        } else if (Math.abs(aoa) > stallAoA) {
+          const over = (Math.abs(aoa) - stallAoA) / (8 * Math.PI / 180);
+          stallFactor = Math.max(0.2, 1 - over);
+          this.stalling = over > 0.3;
+          this.euler.z += Math.sign(this.euler.z || this.aileron || 0.01) * over * 0.4 * dt;
+        } else {
+          this.stalling = false;
+        }
       }
       Cl *= stallFactor;
 
@@ -1230,11 +1297,12 @@ export class FlightModel {
         }
       }
 
-      // Flare window: nose-up bleeds sink (stronger on easy types)
-      if (this.approachPhase === 'flare_window' && this.euler.x > 0.04 && this.velocity.y < 0) {
+      // Flare window: only a real nose-up on a light type bleeds sink. Firm jets and fighters do not float.
+      if (!s.firmFlare && s.type !== 'fighter' && s.id !== 'f15' && s.id !== 'airliner'
+        && this.approachPhase === 'flare_window' && this.euler.x < -0.04 && this.velocity.y < 0) {
         const easy = (s.diff === 'easy' || s.diff === 'med');
-        const assist = (this.flareAssist !== false && easy) ? 1.55 : 1.12;
-        this.velocity.y *= Math.pow(0.42, dt * assist);
+        const assist = (this.flareAssist !== false && easy) ? 1.25 : 0.85;
+        this.velocity.y *= Math.pow(0.58, dt * assist);
       }
 
       const q = 0.5 * rho * speed * speed;
@@ -1253,14 +1321,40 @@ export class FlightModel {
 
       let Cd = s.drag + this.flaps * s.flapDrag + (this.gearDown && s.gearRetractable ? s.gearDrag : 0);
       if (this.spoilers) Cd += s.spoilerDrag || 0.1;
+      if (s.id === 'gyro' || s.type === 'gyro') Cd += 0.09;
       let kInd = 0.04;
       if (ge > 0) kInd *= 0.90;
+      if (s.type === 'glider') kInd = 0.028 + (Math.abs(aoa) > 0.12 ? 0.05 : 0);
       Cd += (Cl * Cl) * kInd;
-      // Glider: exceptionally clean
-      if (s.type === 'glider' && !this.spoilers) Cd = Math.min(Cd, s.drag + this.flaps * s.flapDrag * 0.5 + Cl * Cl * 0.025);
+      // Glider: exceptionally clean until you pull. A pull spends the dive.
+      if (s.type === 'glider' && !this.spoilers) Cd = Math.min(Cd, s.drag + this.flaps * s.flapDrag * 0.5 + Cl * Cl * (Math.abs(aoa) > 0.1 ? 0.045 : 0.022));
+
+      const vne = s.maxSpeed || 200;
+      const machFrac = speed / Math.max(20, vne);
+      if (machFrac > 0.7) {
+        const rise = (machFrac - 0.7) / 0.3;
+        const riseK = fighter ? 1.15 : (glider ? 0.85 : (s.id === 'airliner' ? 2.6 : (lightProp ? 7.2 : 3.1)));
+        Cd *= 1 + riseK * rise * rise;
+      }
 
       const drag = q * s.wingArea * Cd;
       this._force.addScaledVector(velDir, -drag);
+
+      // Pulling out of a dive buys a curved flight path, not free altitude. Induced drag is the bill.
+      const noseUpCmd = (this.elevator + this.trim) < -0.12;
+      if (!this.onGround && noseUpCmd && this.velocity.y < -7 && speed > vs * 1.35) {
+        const pull = Math.min(1, -(this.elevator + this.trim));
+        this._force.addScaledVector(velDir, -q * s.wingArea * (0.05 + 0.42 * pull));
+      }
+
+      if (glider && !this.onGround) {
+        const ld = s.bestLD || 42;
+        const horiz = Math.hypot(airX, airZ);
+        const minSink = Math.max(s.minSink || 0.55, horiz / ld);
+        if (this.velocity.y > -minSink * 0.4 && speed < vne * 0.92) {
+          this._force.y -= mass * (1.6 + Math.max(0, this.velocity.y + minSink * 0.4));
+        }
+      }
     } else {
       this.stalling = false;
     }
@@ -1269,6 +1363,23 @@ export class FlightModel {
     if (this.onWater && speed > 0.5) {
       const velDir = this._tmp.copy(this.velocity).normalize();
       this._force.addScaledVector(velDir, -speed * speed * 40);
+    }
+
+    // Gyro and blimp are wind toys: they do not penetrate, they weathercock.
+    if (s.id === 'gyro' || s.type === 'gyro') {
+      const w = windAt(agl);
+      this._force.x += ((w.x || 0) - this.velocity.x) * mass * 0.16;
+      this._force.z += ((w.z || 0) - this.velocity.z) * mass * 0.16;
+      const cross = (w.x || 0) * Math.cos(this.euler.y) - (w.z || 0) * Math.sin(this.euler.y);
+      this.euler.y += cross * 0.06 * dt;
+    }
+    if (s.id === 'blimp' || s.type === 'blimp') {
+      const w = windAt(agl);
+      this._force.y += mass * G * 0.98;
+      this._force.x += ((w.x || 0) - this.velocity.x) * mass * 0.65;
+      this._force.z += ((w.z || 0) - this.velocity.z) * mass * 0.65;
+      const cross = (w.x || 0) * Math.cos(this.euler.y) - (w.z || 0) * Math.sin(this.euler.y);
+      this.euler.y += cross * 0.04 * dt;
     }
   }
 
