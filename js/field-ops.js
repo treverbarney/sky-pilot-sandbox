@@ -120,6 +120,9 @@ function pumpjack() {
   const horse = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.1, 0.4), dark);
   horse.position.set(2.2, -0.4, 0);
   beam.add(horse);
+  const weight = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.7, 0.8), dark);
+  weight.position.set(-2.3, -0.2, 0);
+  beam.add(weight);
   g.add(beam);
   return g;
 }
@@ -154,16 +157,122 @@ function tanks() {
 }
 
 function roadMesh(rd) {
+  const g = new THREE.Group();
   const dx = rd.bx - rd.ax;
   const dz = rd.bz - rd.az;
   const len = Math.hypot(dx, dz);
-  const geo = new THREE.PlaneGeometry(rd.halfW * 2, len);
-  const mat = new THREE.MeshLambertMaterial({ color: rd.rough > 0.3 ? 0x8a6844 : 0xa48458 });
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.rotation.x = -Math.PI / 2;
-  mesh.position.set((rd.ax + rd.bx) / 2, 1.25, (rd.az + rd.bz) / 2);
-  mesh.rotation.z = -Math.atan2(dx, dz);
-  return mesh;
+  const midX = (rd.ax + rd.bx) / 2;
+  const midZ = (rd.az + rd.bz) / 2;
+  const yaw = -Math.atan2(dx, dz);
+  const dirt = rd.rough > 0.3 ? 0x8a6844 : 0xa48458;
+
+  function lay(width, color, y) {
+    const mesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(width, len),
+      new THREE.MeshLambertMaterial({ color })
+    );
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.rotation.z = yaw;
+    mesh.position.set(midX, y, midZ);
+    g.add(mesh);
+  }
+
+  lay(rd.halfW * 2 + 6, 0x6d5438, 1.18); // gravel shoulder
+  lay(rd.halfW * 2, dirt, 1.26);
+  lay(1.1, 0x5c4630, 1.32); // center rut
+  return g;
+}
+
+function flareStack() {
+  const g = new THREE.Group();
+  const pole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.18, 0.28, 14, 6),
+    new THREE.MeshLambertMaterial({ color: 0xb9b3a4 })
+  );
+  pole.position.y = 7;
+  g.add(pole);
+  const flame = new THREE.Mesh(
+    new THREE.ConeGeometry(0.55, 2.4, 6),
+    new THREE.MeshLambertMaterial({ color: 0xffb15a, emissive: 0xff6a1a, emissiveIntensity: 0.8 })
+  );
+  flame.name = 'flame';
+  flame.position.y = 15.2;
+  g.add(flame);
+  return g;
+}
+
+function trailer() {
+  const g = new THREE.Group();
+  const box = new THREE.Mesh(
+    new THREE.BoxGeometry(3.2, 2.4, 8),
+    new THREE.MeshLambertMaterial({ color: 0xd8d2c4 })
+  );
+  box.position.y = 1.8;
+  g.add(box);
+  const door = new THREE.Mesh(
+    new THREE.BoxGeometry(0.1, 1.6, 0.8),
+    new THREE.MeshLambertMaterial({ color: 0x3a4250 })
+  );
+  door.position.set(1.65, 1.6, 2.4);
+  g.add(door);
+  return g;
+}
+
+function pickup() {
+  const g = new THREE.Group();
+  const cab = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.3, 2.2), new THREE.MeshLambertMaterial({ color: 0xc23b2e }));
+  cab.position.set(0, 1.3, 0.6);
+  g.add(cab);
+  const bed = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.5, 2.2), new THREE.MeshLambertMaterial({ color: 0x8e2c24 }));
+  bed.position.set(0, 0.9, -1.4);
+  g.add(bed);
+  return g;
+}
+
+function wellhead() {
+  const g = new THREE.Group();
+  const dark = new THREE.MeshLambertMaterial({ color: 0x2c3138 });
+  const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 1.6, 6), dark);
+  pipe.position.y = 0.8;
+  g.add(pipe);
+  const cross = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.28, 0.28), new THREE.MeshLambertMaterial({ color: 0xd4552a }));
+  cross.position.y = 1.5;
+  g.add(cross);
+  return g;
+}
+
+function dressLease(root, flames) {
+  const flare = flareStack();
+  flare.position.set(1275, 1.2, 1265);
+  root.add(flare);
+  const flame = flare.getObjectByName('flame');
+  if (flame) flames.push(flame);
+
+  const doghouse = trailer();
+  doghouse.position.set(1148, 1.2, 1168);
+  root.add(doghouse);
+
+  const truck = pickup();
+  truck.position.set(1162, 1.2, 1178);
+  truck.rotation.y = 0.4;
+  root.add(truck);
+
+  for (const [x, z] of [[1132, 1268], [1210, 1395], [1260, 1290]]) {
+    const w = wellhead();
+    w.position.set(x, 1.2, z);
+    root.add(w);
+  }
+
+  // Fence posts along the east side of the Bakken lease, off the road.
+  const postMat = new THREE.MeshLambertMaterial({ color: 0xc8b48a });
+  for (let z = 1180; z <= 1480; z += 18) {
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 1.3, 5), postMat);
+    post.position.set(1202, 1.8, z);
+    root.add(post);
+  }
+
+  // A few pumpjacks beside the long section-line strip, not on it.
+  return;
 }
 
 export function createFieldOps(scene) {
@@ -171,6 +280,7 @@ export function createFieldOps(scene) {
   root.name = 'field-ops';
   scene.add(root);
   const beams = [];
+  const flames = [];
 
   for (const rd of ROADS) {
     const mesh = roadMesh(rd);
@@ -195,6 +305,15 @@ export function createFieldOps(scene) {
   const battery = tanks();
   battery.position.set(1105, 1.2, 1210);
   root.add(battery);
+  dressLease(root, flames);
+
+  const sideJacks = [[-1540, 200], [-1540, 700], [-1620, 1100]];
+  for (const [x, z] of sideJacks) {
+    const p = pumpjack();
+    p.position.set(x, 1.2, z);
+    root.add(p);
+    beams.push(p.getObjectByName('beam'));
+  }
 
   return {
     root,
@@ -216,8 +335,13 @@ export function createFieldOps(scene) {
     },
     update(dt) {
       const t = performance.now() * 0.001;
-      for (const beam of beams) {
-        if (beam) beam.rotation.z = Math.sin(t * 1.3) * 0.35;
+      beams.forEach((beam, i) => {
+        if (beam) beam.rotation.z = Math.sin(t * 1.3 + i * 0.7) * 0.38;
+      });
+      for (const flame of flames) {
+        const flick = 0.75 + Math.abs(Math.sin(t * 9)) * 0.45;
+        flame.scale.y = flick;
+        flame.material.emissiveIntensity = 0.5 + flick;
       }
     }
   };

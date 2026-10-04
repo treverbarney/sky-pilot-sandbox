@@ -528,7 +528,7 @@ export class FlightModel {
     // Step taxi vs plow. On the step the run shortens; off it, water takeoff stays long.
     const step = applyAmphibWater(this, vert, gs);
     if (step.event) return step.event;
-    this.velocity.y = 0;
+    this.velocity.y = step.porpoise || 0;
     let wfric = step.wfric;
     this.euler.x *= step.pitchDamp;
     this.euler.z *= step.rollDamp;

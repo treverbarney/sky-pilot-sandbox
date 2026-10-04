@@ -1087,8 +1087,14 @@ function loop() {
     }
     // Water wake for amphib
     if (currentSpec?.canWater && water && flight.onGround && spd > 3) {
-      effects.wake(flight.position, flight.onStep ? spd * 1.4 : spd * 0.55);
-      if (flight.onStep) effects.splash(flight.position.clone(), 0.65);
+      const spray = flight.stepSpray ?? (flight.onStep ? 1 : 0.3);
+      effects.wake(flight.position, (flight.onStep ? spd * 1.4 : spd * 0.55) * (0.6 + spray));
+      if (spray > 0.2) effects.splash(flight.position.clone(), 0.35 + spray * 0.7);
+      if (flight.onStep && !flight._stepToast) {
+        flight._stepToast = true;
+        hud.toast('ON THE STEP — spray up, drag down');
+      }
+      if (!flight.onStep) flight._stepToast = false;
     }
     // Touchdown FX edge
     if (!_wasOnGround && flight.onGround) {
