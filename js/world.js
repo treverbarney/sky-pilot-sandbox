@@ -652,6 +652,7 @@ export function createWorld(scene, opts = {}) {
   terminal.position.set(WORLD.hangar.x + 95, 0, WORLD.hangar.z + 10);
   root.add(terminal);
   dressAirport(root, useStd, qualityKey);
+  dressRampLife(root, useStd);
 
   // PAPI — 4-box glide path lights (white / red readable)
   const papiGroup = new THREE.Group();
@@ -993,11 +994,15 @@ export function createWorld(scene, opts = {}) {
   pole.position.y = 4.5;
   sock.add(pole);
   const cone = new THREE.Mesh(
-    new THREE.ConeGeometry(0.7, 3.2, 8, 1, true),
+    new THREE.ConeGeometry(1.35, 6.4, 8, 1, true),
     makeToonPbr({ color: 0xff7a2a, roughness: 0.7, metalness: 0.05, side: THREE.DoubleSide })
   );
   cone.rotation.z = Math.PI / 2;
-  cone.position.set(1.6, 8.4, 0);
+  cone.position.set(3.1, 10.2, 0);
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.9, 0.45, 8, 1, true), makeFarLambert(0xfff4d2));
+  band.rotation.z = Math.PI / 2;
+  band.position.set(2.2, 10.2, 0);
+  sock.add(band);
   cone.name = 'sockCone';
   sock.add(cone);
   sock.position.set(-38, 0, -70);
@@ -1535,6 +1540,44 @@ function dressAirport(root, useStd, qualityKey) {
     wheels.instanceMatrix.needsUpdate = true;
     root.add(carts);
     root.add(wheels);
+  }
+}
+
+
+function dressRampLife(root, useStd) {
+  const yellow = useStd
+    ? makeToonPbr({ color: 0xffcc22, roughness: 0.45, metalness: 0.1 })
+    : makeFarLambert(0xffcc22);
+  const black = makeFarLambert(0x1a1a22);
+  const red = makeFarLambert(0xd6453d);
+  const cream = makeFarLambert(0xf6f1e4);
+  const glass = makeFarLambert(0x7ec8ea);
+  // Follow-me car on the apron, clear of the runway and taxiway centerline
+  const car = new THREE.Group();
+  car.name = 'followMe';
+  boxAt(car, 2.1, 0.7, 3.8, yellow, 0, 0.7, 0);
+  boxAt(car, 1.6, 0.55, 1.5, glass, 0, 1.25, 0.3);
+  boxAt(car, 0.7, 0.35, 0.7, black, 0, 1.7, -1.5);
+  boxAt(car, 0.35, 0.2, 0.15, black, -0.7, 0.85, 1.95);
+  boxAt(car, 0.35, 0.2, 0.15, black, 0.7, 0.85, 1.95);
+  for (const [x, z] of [[-0.85, 1.2], [0.85, 1.2], [-0.85, -1.2], [0.85, -1.2]]) {
+    cylAt(car, 0.32, 0.32, 0.22, 8, black, x, 0.32, z, 0, 0, Math.PI / 2);
+  }
+  car.position.set(-70, 0, -28);
+  car.rotation.y = 0.6;
+  root.add(car);
+
+  // Fire station bay east of the GA terminal, off pavement
+  if (!blocksRoad(-170, -28, 10)) {
+    const bay = new THREE.Group();
+    bay.name = 'fireBay';
+    boxAt(bay, 16, 7, 10, cream, 0, 3.5, 0);
+    boxAt(bay, 17, 0.6, 11, red, 0, 7.2, 0);
+    boxAt(bay, 6, 4.2, 0.2, red, -3, 2.4, 5.1);
+    boxAt(bay, 6, 4.2, 0.2, red, 3.2, 2.4, 5.1);
+    boxAt(bay, 2.2, 0.5, 0.15, yellow, 0, 6.2, 5.2);
+    bay.position.set(-170, 0, -28);
+    root.add(bay);
   }
 }
 

@@ -161,6 +161,21 @@ export function addCraftDetails(g, spec) {
 
   addReadableKit(g, id, accent, metal, dark, chrome);
 
+  const tailMark = {
+    cessna182: () => box(g, 0.42, 0.22, 0.06, accent, 0.02, 1.35, -1.92),
+    privatejet: () => box(g, 0.5, 0.16, 0.06, accent, 0, 1.85, -2.35),
+    airliner: () => box(g, 0.9, 0.28, 0.08, accent, 0, 2.4, -5.35),
+    f15: () => box(g, 0.28, 0.45, 0.06, accent, -0.55, 1.35, -2.05),
+    area51: () => box(g, 0.7, 0.1, 0.06, accent, 0, 0.32, -1.45),
+    amphibian: () => box(g, 0.4, 0.18, 0.06, accent, 0, 1.05, -1.95),
+    aerobatic: () => box(g, 0.36, 0.5, 0.06, accent, 0, 1.15, -1.72),
+    cargo: () => box(g, 0.7, 0.22, 0.08, accent, 0, 1.85, -3.15),
+    glider: () => box(g, 0.32, 0.4, 0.05, accent, 0, 0.85, -1.85),
+    heli: () => box(g, 0.22, 0.28, 0.06, accent, 0.62, 1.15, -3.35)
+  };
+  if (tailMark[id]) tailMark[id]();
+
+
   if (id === 'heli') {
     box(g, 0.08, 0.08, 1.6, metal, 0, 0.55, 2.0); // skid brace
     box(g, 1.5, 0.06, 0.08, metal, 0, 0.15, 0.6);
