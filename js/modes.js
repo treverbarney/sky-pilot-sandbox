@@ -345,21 +345,33 @@ export class ModeManager {
       this._canopyStall -= dt;
     } else if (flare && !dive) {
       const h = Math.hypot(ax, az);
-      // A double-toggle with nothing in the bank stalls. Speed you built in the dive is the only money.
-      const slow = air < 13 || (agl > 28 && h < 11 && -ay < 6);
-      if (slow) {
-        this._canopyStall = agl > 18 ? 1.8 : 1.15;
+      this._flareHold = (this._flareHold || 0) + dt;
+      // Entering a flare with an empty bank stalls. A dive you already built may plane out.
+      const banked = air > 22 || h > 18 || -ay > 12;
+      if (!banked && this._flareHold < 0.2) {
+        this._canopyStall = agl > 18 ? 2.0 : 1.2;
         cl = 0.1;
         cd = 1.35;
+      } else if (this._flareHold < 0.85 && banked) {
+        // Short, loaded plane-out. About 2g, not a parachute brake.
+        cl = 0.78;
+        cd = 0.11;
+      } else if (h > 14) {
+        // After the plane-out, fly the speed you have. Lift matches weight; drag spends it.
+        const qNow = 0.5 * rho * Math.max(air, 8) * Math.max(air, 8);
+        cl = Math.min(0.72, Math.max(0.22, (mass * 9.81) / (qNow * area)));
+        cd = agl < 12 ? 0.09 : 0.13;
       } else {
-        cl = 1.32;
-        cd = agl < 18 ? 0.38 : 0.58;
+        this._canopyStall = agl > 16 ? 1.7 : 1.1;
+        cl = 0.1;
+        cd = 1.3;
       }
     } else if (dive) {
       // Front-riser dive: steep, and altitude turns into speed. Not a flat cruise.
       cl = 0.12;
       cd = 0.085;
     }
+    if (!flare) this._flareHold = 0;
     if (!opening && Math.abs(steer) > 0.4 && air > 14 && (this._canopyStall || 0) <= 0) {
       cd *= 1.22;
       cl *= 0.9;
@@ -415,6 +427,12 @@ export class ModeManager {
       ax = nx; az = nz;
     }
 
+    const hNow = Math.hypot(ax, az);
+    if (flare && !dive && hNow > 15 && (this._canopyStall || 0) <= 0) {
+      if (agl > 35) ay = Math.min(ay, 2.5);
+      else if (agl > 8) ay = Math.min(ay, -2.4);
+      else ay = Math.max(-1.1, Math.min(ay, 0.35));
+    }
     this.vel.x = ax + (w.x || 0);
     this.vel.y = ay;
     this.vel.z = az + (w.z || 0);
@@ -434,7 +452,7 @@ export class ModeManager {
     }
 
     const speed = Math.hypot(this.vel.x, this.vel.z);
-    const skimming = flare && !opening && !stalled && agl2 > 0.8 && agl2 < 12 && speed > 16 && this.vel.y > -4;
+    const skimming = flare && !opening && !stalled && agl2 > 0.8 && agl2 < 22 && speed > 15 && this.vel.y > -5;
     if (this.pos.y <= g2 + 1.45 && !skimming) {
       this.pos.y = g2 + 1.5;
       if (speed > 26 || this.vel.y < -8 || stalled) {
