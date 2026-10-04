@@ -181,7 +181,10 @@ export class FlightModel {
 
   getStallSpeed() {
     const s = this.spec;
-    let vs = this.flaps > 0.4 ? (s.stallSpeedFlaps || s.stallSpeed * 0.85) : s.stallSpeed;
+    const clean = s.stallSpeed;
+    const dirty = s.stallSpeedFlaps || clean * 0.86;
+    const f = Math.max(0, Math.min(1, this.flaps || 0));
+    let vs = clean + (dirty - clean) * f;
     if (s.thrustVector && this.thrustVectorOn && this.throttle > 0.5) {
       vs = Math.min(vs, s.stallSpeedTV || 15);
     }
@@ -245,6 +248,7 @@ export class FlightModel {
     if (!this.alive) return;
     const s = this.spec;
     dt = Math.min(dt, 0.05);
+    this._dt = dt;
     const mass = this.getEffectiveMass();
 
     // Attitude: heavy jets mushy at low speed; C182 stays snappy / pitch-sensitive
@@ -387,6 +391,38 @@ export class FlightModel {
     this._tmp.copy(this._force).multiplyScalar(dt / mass);
     this.velocity.add(this._tmp);
 
+    // A pullout bends the flight path toward level at a limited rate. Still descending until it is flat.
+    // Do not stop at a steep mush: a light prop was quitting around -6 m/s and settling near -18.
+    // Path angle is clamped at 0 so the bend cannot rotate the velocity up into a climb.
+    if (!s.isHeli && !this.onGround && (this.elevator + this.trim) < -0.2 && this.velocity.y < -0.6) {
+      const iasNow = this._airSpeed || this.getAirspeed();
+      const vsNow = this.getStallSpeed();
+      if (iasNow > vsNow * 1.3) {
+        const pull = Math.min(1, -(this.elevator + this.trim));
+        const wP = windAt(Math.max(0, agl));
+        let ax = this.velocity.x - (wP.x || 0);
+        let ay = this.velocity.y;
+        let az = this.velocity.z - (wP.z || 0);
+        const horiz = Math.hypot(ax, az);
+        const spd = Math.hypot(horiz, ay);
+        if (spd > 1 && ay < 0) {
+          const fwdH = Math.hypot(this._fwd.x, this._fwd.z) || 1;
+          const path = Math.atan2(-ay, Math.max(horiz, 0.5));
+          // Light props need the arc to finish (the old -6 m/s cutoff left them mushed),
+          // but a slower rate so the level-off still spends altitude.
+          const light = s.type === 'prop' || s.type === 'glider' || (s.mass || 0) < 3000;
+          const rate = (light ? 0.22 : 0.35) + (light ? 0.4 : 0.7) * pull;
+          const next = Math.max(0, path - rate * dt);
+          const nh = spd * Math.cos(next);
+          const ny = -spd * Math.sin(next);
+          const bleed = 1 - Math.min(0.06, (0.015 + 0.04 * pull) * dt * 6);
+          this.velocity.x = (wP.x || 0) + (this._fwd.x / fwdH) * nh * bleed;
+          this.velocity.y = ny * bleed;
+          this.velocity.z = (wP.z || 0) + (this._fwd.z / fwdH) * nh * bleed;
+        }
+      }
+    }
+
     // Crosswind weathervane from live weather (do not add wind as extra accel — aero uses airspeed)
     {
       const wloc = windAt(agl);
@@ -420,8 +456,8 @@ export class FlightModel {
         if (s.id === 'gyro' || s.id === 'blimp' || s.type === 'gyro' || s.type === 'blimp') {
           this.euler.y += cross * (s.id === 'blimp' || s.type === 'blimp' ? 0.08 : 0.05) * dt;
         }
-        if ((s.id === 'cessna182' || s.id === 'gyro' || s.id === 'duster' || s.snappy) && spdNow > 10) {
-          this.euler.z += Math.sign(cross || 1) * ws * 0.1 * dt * Math.min(1, (spdNow - 10) / 20);
+        if ((s.id === 'cessna182' || s.id === 'gyro' || s.id === 'duster' || s.snappy) && spdNow > 10 && Math.abs(cross) > 0.6) {
+          this.euler.z += Math.sign(cross) * ws * 0.1 * dt * Math.min(1, (spdNow - 10) / 20);
           if (Math.abs(this.euler.z) > 0.85 && spdNow > 14 && Math.abs(cross) > 6) {
             this.euler.z *= 0.4;
             this.velocity.x *= 0.55;
@@ -442,8 +478,12 @@ export class FlightModel {
       const ias = Math.hypot(ax, ay, az);
       const fighter = s.type === 'fighter' || s.id === 'f15';
       this._vneBuffet = 0;
-      if (!s.isHeli && ias > vne * 0.86) {
-        const frac = (ias - vne * 0.86) / Math.max(1, vne * 0.14);
+      // Fast jets often top out just under 0.86 Vne, so buffet would stay silent.
+      // Start theirs a little earlier. Light props stay at 0.86 Vne. Do not lower the cap.
+      const buffetAt = fighter ? 0.80 : 0.86;
+      const buffetBand = fighter ? 0.26 : 0.14;
+      if (!s.isHeli && ias > vne * buffetAt) {
+        const frac = (ias - vne * buffetAt) / Math.max(1, vne * buffetBand);
         this._vneBuffet = Math.min(fighter ? 1.1 : 1.7, frac);
         const t = performance.now() * 0.001;
         this.euler.x += Math.sin(t * 46) * this._vneBuffet * 0.04 * dt * 28;
@@ -676,14 +716,16 @@ export class FlightModel {
 
     this.velocity.y = Math.max(0, this.velocity.y);
 
-    // Ground friction / brakes / reverse / park / autobrake
-    let fric = 0.988;
+    // Rolling resistance in time, not per frame, so a light prop can actually reach Vr.
+    const step = Math.max(0.016, Math.min(0.05, this._dt || 0.05));
+    let tau = 36;
     if (this.parkBrake || this.park) {
-      fric = 0.72;
+      tau = 0.35;
       this.throttle = Math.min(this.throttle, 0.02);
     } else if (this.brakes) {
-      fric = 0.86;
+      tau = 0.7;
     }
+    let fric = Math.exp(-step / tau);
     if (this._autobrakeActive && (this.autobrakeLevel || this.autobrake) > 0 && !this.reverse) {
       fric *= (this.autobrakeLevel || this.autobrake) >= 2 ? 0.90 : 0.94;
     }
@@ -1235,8 +1277,8 @@ export class FlightModel {
           }
         } else if (Math.abs(aoa) > stallAoA) {
           const over = (Math.abs(aoa) - stallAoA) / (12 * Math.PI / 180);
-          stallFactor = Math.max(0.42, 1 - over * 0.5);
-          this.stalling = over > 0.5;
+          stallFactor = Math.max(speed > vs * 1.35 ? 0.72 : 0.42, 1 - over * 0.5);
+          this.stalling = over > 0.5 && speed < vs * 1.5;
           if (!this.onGround && this.stalling) this.euler.x += 0.26 * dt;
         } else {
           this.stalling = false;
@@ -1273,9 +1315,10 @@ export class FlightModel {
       }
       Cl *= stallFactor;
 
-      // Spoilers kill lift / add drag
-      if (this.spoilers) {
-        Cl *= (1 - (s.spoilerLiftKill || 0.4));
+      // Spoilers kill lift. Specs that only nick it still dump the wing.
+      if (this.spoilers && (s.hasSpoilers || s.spoilerLiftKill)) {
+        const kill = Math.min(0.92, Math.max(0.78, s.spoilerLiftKill || 0));
+        Cl *= (1 - kill);
       }
 
       // Ground effect — strong below ~20 ft; peak from type (C182 floats hard)
@@ -1319,8 +1362,8 @@ export class FlightModel {
         this._force.addScaledVector(this._up, lift);
       }
 
-      let Cd = s.drag + this.flaps * s.flapDrag + (this.gearDown && s.gearRetractable ? s.gearDrag : 0);
-      if (this.spoilers) Cd += s.spoilerDrag || 0.1;
+      let Cd = s.drag + this.flaps * Math.max(s.flapDrag || 0, 0.045) + (this.gearDown && s.gearRetractable ? s.gearDrag : 0);
+      if (this.spoilers && (s.hasSpoilers || s.spoilerDrag)) Cd += Math.max(s.spoilerDrag || 0, 0.22);
       if (s.id === 'gyro' || s.type === 'gyro') Cd += 0.09;
       let kInd = 0.04;
       if (ge > 0) kInd *= 0.90;
@@ -1344,7 +1387,7 @@ export class FlightModel {
       const noseUpCmd = (this.elevator + this.trim) < -0.12;
       if (!this.onGround && noseUpCmd && this.velocity.y < -7 && speed > vs * 1.35) {
         const pull = Math.min(1, -(this.elevator + this.trim));
-        this._force.addScaledVector(velDir, -q * s.wingArea * (0.05 + 0.42 * pull));
+        this._force.addScaledVector(velDir, -q * s.wingArea * (0.08 + 0.7 * pull));
       }
 
       if (glider && !this.onGround) {
