@@ -473,6 +473,7 @@ export function createWorld(scene, opts = {}) {
   hangar.add(stripe);
   hangar.position.set(WORLD.hangar.x, 0, WORLD.hangar.z);
   root.add(hangar);
+  dressHangar(root, hangar, useStd);
 
   // Control tower
   const towerMat = useStd
@@ -1143,6 +1144,9 @@ export function createWorld(scene, opts = {}) {
         if (o.name === 'sockCone') {
           o.rotation.y = Math.atan2(WIND.x || 0.01, WIND.z || 0.01);
         }
+        if (o.name === 'hangarBeacon') {
+          o.rotation.y += dt * 2.2;
+        }
         if (o.name === 'flock') {
           o.position.x = 180 + Math.sin(t * 0.18) * 90;
           o.position.z = 120 + Math.cos(t * 0.14) * 70;
@@ -1186,6 +1190,176 @@ export function sampleHeight(x, z) {
     if (d < f.r) y *= d / f.r * 0.15;
   }
   return Math.max(0, y);
+}
+
+
+function boxAt(parent, w, h, d, material, x, y, z, rx = 0, ry = 0, rz = 0) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
+  m.position.set(x, y, z);
+  m.rotation.set(rx, ry, rz);
+  parent.add(m);
+  return m;
+}
+
+function cylAt(parent, rt, rb, h, seg, material, x, y, z, rx = 0, ry = 0, rz = 0) {
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), material);
+  m.position.set(x, y, z);
+  m.rotation.set(rx, ry, rz);
+  parent.add(m);
+  return m;
+}
+
+/** Props must stay off the runway strip and the road corridors. */
+function blocksRoad(x, z, pad = 14) {
+  if (Math.abs(x) < WORLD.runway.halfW + 6 && Math.abs(z) < WORLD.runway.halfL + 8) return true;
+  for (const rd of WORLD.roads) {
+    const dx = rd.bx - rd.ax;
+    const dz = rd.bz - rd.az;
+    const len2 = dx * dx + dz * dz || 1;
+    const t = Math.max(0, Math.min(1, ((x - rd.ax) * dx + (z - rd.az) * dz) / len2));
+    const px = rd.ax + dx * t;
+    const pz = rd.az + dz * t;
+    if ((x - px) * (x - px) + (z - pz) * (z - pz) < pad * pad) return true;
+  }
+  return false;
+}
+
+/**
+ * Hangar ramp dressing. Interior clutter sits inside the bay; the fuel truck,
+ * cones, and tie-down paint stay south/east so the city road (leaving north-west)
+ * and the runway stay clear. Windsock is already placed by createWorld.
+ */
+function dressHangar(root, hangar, useStd) {
+  const red = useStd
+    ? makeToonPbr({ color: 0xe23b2f, roughness: 0.45, metalness: 0.12 })
+    : makeFarLambert(0xe23b2f);
+  const steel = useStd
+    ? makeToonPbr({ color: 0xc5ccd4, roughness: 0.32, metalness: 0.62 })
+    : makeFarLambert(0xc5ccd4);
+  const dark = makeFarLambert(0x1c2430);
+  const orange = useStd
+    ? makeToonPbr({ color: 0xff8a1e, roughness: 0.5, metalness: 0.08 })
+    : makeFarLambert(0xff8a1e);
+  const glass = useStd
+    ? makeToonPbr({
+        color: 0x8fd4ff,
+        emissive: 0x2a6a90,
+        emissiveIntensity: 0.35,
+        roughness: 0.15,
+        metalness: 0.1,
+        transparent: true,
+        opacity: 0.82
+      })
+    : makeFarLambert(0x8fd4ff);
+  const yellow = makeFarLambert(0xffd23a);
+  const cream = makeFarLambert(0xf4efe4);
+  const paint = new THREE.MeshBasicMaterial({ color: 0xfff4d2 });
+  const nosePaint = new THREE.MeshBasicMaterial({ color: 0xe23b2f });
+
+  const office = new THREE.Group();
+  office.name = 'hangarOffice';
+  boxAt(office, 14, 7, 8, cream, 0, 3.5, 0);
+  boxAt(office, 15.2, 0.55, 9.2, red, 0, 7.25, 0);
+  for (const x of [-4.2, -1.4, 1.4, 4.2]) {
+    boxAt(office, 2.1, 2.4, 0.18, glass, x, 4.2, 4.08);
+    boxAt(office, 2.3, 0.16, 0.22, steel, x, 5.5, 4.12);
+  }
+  boxAt(office, 1.7, 2.5, 0.18, dark, 0, 1.35, 4.12);
+  for (let i = 0; i < 4; i++) {
+    boxAt(office, 2.4, 0.28, 0.72, steel, 0, 0.2 + i * 0.28, 4.5 + i * 0.55);
+  }
+  boxAt(office, 0.12, 1.35, 0.12, steel, -1.2, 1.55, 6.3);
+  boxAt(office, 0.12, 1.35, 0.12, steel, 1.2, 1.55, 6.3);
+  boxAt(office, 2.6, 0.08, 0.08, yellow, 0, 2.15, 6.3);
+  office.position.set(12, 0, -20);
+  hangar.add(office);
+
+  const chestMat = useStd
+    ? makeToonPbr({ color: 0xd23a32, roughness: 0.55, metalness: 0.22 })
+    : makeFarLambert(0xd23a32);
+  for (const z of [-8, 0, 7]) {
+    const chest = new THREE.Group();
+    boxAt(chest, 1.7, 1.15, 0.85, chestMat, 0, 0.58, 0);
+    boxAt(chest, 1.55, 0.1, 0.72, steel, 0, 1.2, 0);
+    boxAt(chest, 0.14, 0.18, 0.16, yellow, -0.42, 0.72, 0.44);
+    boxAt(chest, 0.14, 0.18, 0.16, yellow, 0.42, 0.72, 0.44);
+    chest.position.set(20.2, 0, z);
+    hangar.add(chest);
+  }
+  boxAt(hangar, 8.2, 0.95, 1.45, steel, -6, 0.48, -12.2);
+  boxAt(hangar, 7.8, 0.12, 1.2, dark, -6, 1.02, -12.2);
+  boxAt(hangar, 0.35, 2.6, 3.4, steel, -22.2, 1.3, -10);
+  for (const y of [0.55, 1.35, 2.15]) {
+    boxAt(hangar, 0.55, 0.28, 2.8, orange, -21.85, y, -10);
+  }
+  cylAt(hangar, 0.48, 0.48, 1.1, 10, dark, 14, 0.55, -12);
+  cylAt(hangar, 0.48, 0.48, 1.1, 10, orange, 15.3, 0.55, -12);
+  boxAt(hangar, 0.85, 1.05, 0.55, red, 17.5, 0.52, 4);
+
+  for (const [x, z] of [[15.2, 13.5], [18.2, 5.5]]) {
+    cylAt(hangar, 0.22, 0.22, 0.9, 8, red, x, 0.72, z);
+    cylAt(hangar, 0.09, 0.09, 0.22, 6, dark, x, 1.25, z);
+    boxAt(hangar, 0.3, 0.1, 0.12, yellow, x, 0.95, z + 0.18);
+  }
+
+  for (const [x, z] of [[15.5, 20.5], [20.5, 23.5], [15.5, 26.5]]) {
+    cylAt(hangar, 0.1, 0.42, 0.75, 8, orange, x, 0.38, z);
+    boxAt(hangar, 0.55, 0.08, 0.1, cream, x, 0.5, z);
+  }
+
+  const beacon = new THREE.Group();
+  beacon.name = 'hangarBeacon';
+  cylAt(beacon, 0.2, 0.32, 1.15, 8, steel, 0, 0.55, 0);
+  const lamp = new THREE.Mesh(
+    new THREE.SphereGeometry(0.45, 10, 8),
+    new THREE.MeshStandardMaterial({
+      color: 0xff3355,
+      emissive: 0xff2244,
+      emissiveIntensity: 2.2,
+      roughness: 0.35
+    })
+  );
+  lamp.position.y = 1.3;
+  beacon.add(lamp);
+  boxAt(beacon, 1.35, 0.08, 0.08, dark, 0, 1.3, 0);
+  boxAt(beacon, 0.08, 0.08, 1.35, dark, 0, 1.3, 0);
+  beacon.position.set(-14, 17.7, 2);
+  hangar.add(beacon);
+
+  for (const [x, z] of [[-62, -64], [-48, -78], [-78, -90]]) {
+    if (blocksRoad(x, z, 10)) continue;
+    const pad = new THREE.Mesh(new THREE.PlaneGeometry(11, 8), paint);
+    pad.rotation.x = -Math.PI / 2;
+    pad.position.set(x, 0.46, z);
+    root.add(pad);
+    const nose = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 2.8), nosePaint);
+    nose.rotation.x = -Math.PI / 2;
+    nose.position.set(x, 0.48, z + 2);
+    root.add(nose);
+  }
+
+  const tx = -108;
+  const tz = -82;
+  if (!blocksRoad(tx, tz, 12)) {
+    const truck = new THREE.Group();
+    truck.name = 'fuelTruck';
+    const cab = useStd
+      ? makeToonPbr({ color: 0xf4f7fb, roughness: 0.4, metalness: 0.25 })
+      : makeFarLambert(0xf4f7fb);
+    boxAt(truck, 2.3, 1.85, 2.3, cab, 0, 1.55, 2.4);
+    boxAt(truck, 1.9, 0.85, 1.15, glass, 0, 1.95, 3.0);
+    cylAt(truck, 1.15, 1.15, 5.4, 14, red, 0, 1.75, -1.2, Math.PI / 2, 0, 0);
+    boxAt(truck, 0.35, 0.55, 4.8, yellow, 0, 1.75, -1.2);
+    boxAt(truck, 2.5, 0.45, 7.6, dark, 0, 0.72, 0.3);
+    for (const [x, z] of [[-1.0, 2.3], [1.0, 2.3], [-1.0, -2.1], [1.0, -2.1]]) {
+      cylAt(truck, 0.5, 0.5, 0.36, 10, dark, x, 0.5, z, 0, 0, Math.PI / 2);
+    }
+    cylAt(truck, 0.1, 0.1, 1.5, 6, steel, 1.25, 1.15, -3.7);
+    boxAt(truck, 0.7, 0.4, 0.55, yellow, 1.2, 0.85, -3.5);
+    truck.position.set(tx, 0, tz);
+    truck.rotation.y = 0.35;
+    root.add(truck);
+  }
 }
 
 function decorateSandbox(root, qualityKey, useStd, tex) {
