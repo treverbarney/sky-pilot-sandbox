@@ -3,6 +3,8 @@ import { AIRCRAFT, getAircraft, msToKt } from './aircraft-data.js';
 import { FlightModel } from './flight-model.js';
 import { createAircraftMesh } from './meshes.js';
 import { createWorld, WORLD, sampleHeight, STARS } from './world.js';
+import { createMarine } from './marine.js';
+import { createFieldOps } from './field-ops.js';
 import { weather, updateWeather, applyWind, setStorm, setStormAuto, weatherLabel, STORM, setWeather, PRESETS, currentPreset } from './weather.js';
 import { Controls } from './controls.js';
 import { ModeManager } from './modes.js';
@@ -39,7 +41,7 @@ function createRenderer() {
   return r;
 }
 
-let world, effects, modes, hud, controls, helpApi, checklist, audio, course;
+let world, effects, modes, hud, controls, helpApi, checklist, audio, course, marine, fieldOps;
 let checklistStatus = null;
 let flight = null;
 let craftMesh = null;
@@ -113,6 +115,12 @@ async function bootGraphics() {
     await loadGraphicsAssets(renderer, getQualityKey());
     setLoad(0.42);
     world = createWorld(scene, { qualityKey: getQualityKey() });
+    marine = createMarine(scene);
+    fieldOps = createFieldOps(scene);
+    {
+      const baseClassify = world.classifySurface.bind(world);
+      world.classifySurface = (x, z) => fieldOps.classify(x, z) || baseClassify(x, z);
+    }
     setLoad(0.58);
     {
       const have = new Set(loadStars());
@@ -936,6 +944,8 @@ function loop() {
   controls.update();
   effects.update(dt);
   world?.update?.(dt);
+  marine?.update?.(dt);
+  fieldOps?.update?.(dt);
   updateWeather(dt);
   applyWorldWeather();
   // FPS governor → auto Low
@@ -1077,7 +1087,8 @@ function loop() {
     }
     // Water wake for amphib
     if (currentSpec?.canWater && water && flight.onGround && spd > 3) {
-      effects.wake(flight.position, spd);
+      effects.wake(flight.position, flight.onStep ? spd * 1.4 : spd * 0.55);
+      if (flight.onStep) effects.splash(flight.position.clone(), 0.65);
     }
     // Touchdown FX edge
     if (!_wasOnGround && flight.onGround) {
