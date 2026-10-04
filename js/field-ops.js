@@ -21,6 +21,12 @@ const ROADS = [
     name: 'Section-line dirt',
     ax: -1580, az: -150, bx: -1580, bz: 1750,
     halfW: 14, rough: 0.15
+  },
+  {
+    // ~370 m, east of the lake. Long enough for a 182 or duster, short and rough for an airliner or fighter.
+    name: 'East two-track',
+    ax: 1480, az: -620, bx: 1480, bz: -250,
+    halfW: 8, rough: 0.36
   }
 ];
 
@@ -44,7 +50,7 @@ export function leaseTouch(flight, surf, vert, gs, wasGround) {
 
   if (s.isHeli) return null;
 
-  if (light && len >= 140) {
+  if (light && len >= 160) {
     flight.euler.z += (Math.random() - 0.5) * rough * 0.15;
     flight.velocity.x *= 0.99;
     flight.velocity.z *= 0.99;
@@ -53,6 +59,16 @@ export function leaseTouch(flight, surf, vert, gs, wasGround) {
       return { event: 'rough', reason: 'bumpy lease-road rollout', vert, gs };
     }
     return null;
+  }
+  if (light && len < 160) {
+    if (vert > 8 || gs > 45) {
+      flight.alive = false;
+      return { event: 'crash', reason: 'dirt strip too short for even a light plane', vert, gs };
+    }
+    flight.velocity.y = 1.8;
+    flight.onGround = false;
+    flight.position.y += 0.45;
+    return { event: 'bounce', reason: 'dirt strip shorter than a 182 or duster can use', vert, gs };
   }
 
   if (heavy) {
@@ -75,8 +91,9 @@ export function leaseTouch(flight, surf, vert, gs, wasGround) {
   }
 
   if (hot) {
-    const ok = len >= 700 && rough < 0.3;
-    if (ok && gs > 42) {
+    const longEnough = len >= 750 && rough < 0.3;
+    const fastEnough = gs > 55;
+    if (longEnough && fastEnough) {
       return !wasGround ? { event: 'rough', reason: 'fast dirt rollout', vert, gs } : null;
     }
     if (gs > 85 || vert > 5.5) {
@@ -307,7 +324,7 @@ export function createFieldOps(scene) {
   root.add(battery);
   dressLease(root, flames);
 
-  const sideJacks = [[-1540, 200], [-1540, 700], [-1620, 1100]];
+  const sideJacks = [[-1540, 200], [-1540, 700], [-1620, 1100], [1536, -430]];
   for (const [x, z] of sideJacks) {
     const p = pumpjack();
     p.position.set(x, 1.2, z);
