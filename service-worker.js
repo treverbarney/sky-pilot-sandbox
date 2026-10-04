@@ -1,5 +1,5 @@
 /* Sky Pilot Sandbox — network-first app shell + CDN; cache fallback offline */
-const CACHE = 'sky-pilot-sandbox-v19';
+const CACHE = 'sky-pilot-sandbox-v21';
 const SHELL = [
   './',
   './index.html',
@@ -23,6 +23,9 @@ const SHELL = [
   './js/craft-details.js',
   './js/missions.js',
   './js/weather.js',
+  './js/water-ops.js',
+  './js/marine.js',
+  './js/field-ops.js',
   './js/career.js',
   './js/audio.js'
 ];

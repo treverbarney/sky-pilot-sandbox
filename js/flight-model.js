@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { weather, windAt } from './weather.js';
+import { applyAmphibWater } from './water-ops.js';
+import { leaseTouch } from './field-ops.js';
 import { sampleHeight } from './world.js';
 
 const G = 9.81;
@@ -34,6 +36,7 @@ export class FlightModel {
     this.conditionRun = true;
     this.ballast = 0; // 0..1
     this.waterMode = false; // intended water ops (amphib)
+    this.onStep = false;
     this.trim = 0;
     this.rudder = 0;
     this.aileron = 0;
@@ -500,21 +503,25 @@ export class FlightModel {
       if (isWater && s.canWater) {
         return this._handleWaterContact(wasGround, vert, gs);
       } else if (isWater && !s.canWater) {
-        // GTA-style skip/ditch: only wreck on a slam
-        if (vert > 12) {
+        // Other airplanes ditch. They skip or break. They do not step-taxi.
+        this.onStep = false;
+        if (vert > 10 || gs > 55) {
           this.alive = false;
           return { event: 'crash', reason: 'ditched too hard', vert, gs };
         }
-        this.velocity.y = Math.abs(this.velocity.y) * 0.35;
-        this.velocity.x *= 0.7;
-        this.velocity.z *= 0.7;
-        this.position.y = contactY + 0.8;
-        return { event: 'rough', reason: 'water contact — not amphib (ATP fail)', vert, gs };
+        const skip = gs > 18 || vert > 2;
+        this.velocity.y = Math.abs(this.velocity.y) * 0.4 + (skip ? 2.4 : 0.6);
+        this.velocity.x *= skip ? 0.62 : 0.75;
+        this.velocity.z *= skip ? 0.62 : 0.75;
+        this.position.y = contactY + (skip ? 1.4 : 0.6);
+        this.onGround = false;
+        return { event: 'rough', reason: skip ? 'ditch skip — not an amphib' : 'water contact — not amphib (ATP fail)', vert, gs };
       } else {
         return this._handleGroundContact(wasGround, vert, gs, isWater);
       }
     } else {
       this.onGround = false;
+      this.onStep = false;
       this.airborneTime += dt;
     }
     return null;
@@ -525,16 +532,17 @@ export class FlightModel {
     this.onWater = true;
     this.onGround = true;
 
-    // Gear DOWN on water = wreck for amphib
-    if (s.hasGear && this.gearDown && this.airborneTime > 1.5 && vert > 0.3) {
-      if (vert > 10) {
+    // Gear DOWN on water digs in. A real smash ends it; a firm ditch just stops the step.
+    if (s.hasGear && this.gearDown && this.airborneTime > 1.5 && (vert > 0.3 || gs > 8)) {
+      this.onStep = false;
+      if (vert > 8 || gs > 36) {
         this.alive = false;
         return { event: 'crash', reason: 'gear down on water', vert, gs };
       }
       this.velocity.y = 0;
-      this.velocity.x *= 0.5;
-      this.velocity.z *= 0.5;
-      return { event: 'rough', reason: 'gear down on water — ATP fail', vert, gs };
+      this.velocity.x *= 0.42;
+      this.velocity.z *= 0.42;
+      return { event: 'rough', reason: 'gear down on water — dug in, no step taxi', vert, gs };
     }
 
     const vmax = s.waterLandVertMax || 2.5;
@@ -543,17 +551,14 @@ export class FlightModel {
       return { event: 'crash', reason: 'water impact', vert, gs };
     }
 
-    // Water drag / step taxi — soggy amphib rollout
-    this.velocity.y = 0;
-    let wfric = 0.91;
-    if (s.id === 'amphibian' || s.soggyWaterRollout) {
-      wfric = 0.86 - Math.min(0.06, (s.waterRolloutDrag || 0.1) * 0.25);
-      this.euler.x *= 0.78;
-      this.euler.z *= 0.88;
-      this.quaternion.setFromEuler(this.euler);
-    } else {
-      this.euler.x *= 0.92;
-    }
+    // Step taxi vs plow. On the step the run shortens; off it, water takeoff stays long.
+    const step = applyAmphibWater(this, vert, gs);
+    if (step.event) return step.event;
+    this.velocity.y = step.porpoise || 0;
+    let wfric = step.wfric;
+    this.euler.x *= step.pitchDamp;
+    this.euler.z *= step.rollDamp;
+    this.quaternion.setFromEuler(this.euler);
     if (this.brakes || this.reverse) wfric = Math.min(wfric, 0.80);
     this.velocity.x *= wfric;
     this.velocity.z *= wfric;
@@ -572,10 +577,16 @@ export class FlightModel {
   _handleGroundContact(wasGround, vert, gs, isWater) {
     const s = this.spec;
     this.onGround = true;
+    this.onStep = false;
     const world = this._world;
     const surf = world?.classifySurface?.(this.position.x, this.position.z) || { id: 'grass', rough: 0.18, maxClass: 'light' };
     const cls = landClass(s);
     const allowed = surfaceAllows(cls, surf, s);
+
+    if (surf.id === 'lease') {
+      const leaseEv = leaseTouch(this, surf, vert, gs, wasGround);
+      if (leaseEv) return leaseEv;
+    }
 
     if (!allowed && this.airborneTime > 1.2 && vert > 0.8) {
       if (surf.id === 'forest' || surf.id === 'suburb' || surf.maxClass === 'none') {
@@ -676,8 +687,11 @@ export class FlightModel {
 
     this.velocity.y = Math.max(0, this.velocity.y);
 
-    // Ground friction / brakes / reverse / park / autobrake
-    let fric = 0.988;
+    // Ground friction / brakes / reverse / park / autobrake.
+    // Powered roll used to multiply GS by 0.988 every frame (~half per second at 60 fps),
+    // which pinned takeoff GS so headwind/tailwind could not change the roll. Idle and
+    // brake scrub stays; thrust, aero drag, and windAt set the roll when power is up.
+    let fric = (this.throttle > 0.4 && !this.brakes && !this.parkBrake && !this.park) ? 1 : 0.988;
     if (this.parkBrake || this.park) {
       fric = 0.72;
       this.throttle = Math.min(this.throttle, 0.02);
@@ -1359,10 +1373,11 @@ export class FlightModel {
       this.stalling = false;
     }
 
-    // Extra water taxi drag when on water
+    // Plow taxi and the water takeoff run stay draggy until the hull is on the step.
     if (this.onWater && speed > 0.5) {
       const velDir = this._tmp.copy(this.velocity).normalize();
-      this._force.addScaledVector(velDir, -speed * speed * 40);
+      const plow = s.canWater ? (this.onStep ? 14 : 88) : 140;
+      this._force.addScaledVector(velDir, -speed * speed * plow);
     }
 
     // Gyro and blimp are wind toys: they do not penetrate, they weathercock.
@@ -1467,6 +1482,13 @@ function landClass(s) {
 function surfaceAllows(cls, surf, spec) {
   if (!surf) return true;
   if (spec?.canWater && surf.id === 'water') return true;
+  if (surf.id === 'lease') {
+    if (cls === 'balloon' || cls === 'heli') return true;
+    if (spec?.id === 'cessna182' || spec?.id === 'duster' || spec?.shortField) return true;
+    if (cls === 'heavy') return !!(surf.long && (surf.lengthM || 0) >= 1600 && (surf.rough || 1) < 0.22);
+    if (cls === 'hot') return (surf.lengthM || 0) >= 700 && (surf.rough || 1) < 0.3;
+    return (surf.lengthM || 0) >= 400 && (surf.rough || 1) < 0.36;
+  }
   if (cls === 'balloon' || cls === 'heli') {
     return surf.id !== 'building' && surf.id !== 'forest';
   }
