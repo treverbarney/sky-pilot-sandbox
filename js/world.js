@@ -338,32 +338,54 @@ export function createWorld(scene, opts = {}) {
     }
   }
 
-  // Bold runway designators (36 / 18) — chunky readable digits
+  // Runway heading is 0 (north-south): designators are 36 / 18, not 09/27.
+  // Seven-segment digits scaled to ~20 m so they read on approach. Font has 0-9.
   function addRwyDigit(parent, digit, ox, oz, rotY, mat) {
+    const top = [0, 1.28, 1.45, 0.42];
+    const mid = [0, 0, 1.28, 0.38];
+    const bot = [0, -1.28, 1.45, 0.42];
+    const upL = [-0.64, 0.66, 0.42, 1.2];
+    const upR = [0.64, 0.66, 0.42, 1.2];
+    const loL = [-0.64, -0.66, 0.42, 1.2];
+    const loR = [0.64, -0.66, 0.42, 1.2];
+    const flag = [0.28, 1.22, 0.7, 0.36];
     const segs = {
-      0: [[0, 1.1, 1.6, 0.35], [0, -1.1, 1.6, 0.35], [-0.9, 0, 0.35, 2.2], [0.9, 0, 0.35, 2.2]],
-      1: [[0.35, 0, 0.4, 2.5]],
-      3: [[0, 1.1, 1.6, 0.35], [0, 0, 1.4, 0.3], [0, -1.1, 1.6, 0.35], [0.85, 0.55, 0.35, 1.1], [0.85, -0.55, 0.35, 1.1]],
-      6: [[0, 1.1, 1.6, 0.35], [0, 0, 1.4, 0.3], [0, -1.1, 1.6, 0.35], [-0.85, 0.55, 0.35, 1.1], [-0.85, -0.55, 0.35, 1.1], [0.85, -0.55, 0.35, 1.1]],
-      8: [[0, 1.1, 1.6, 0.35], [0, 0, 1.4, 0.3], [0, -1.1, 1.6, 0.35], [-0.85, 0.55, 0.35, 1.1], [0.85, 0.55, 0.35, 1.1], [-0.85, -0.55, 0.35, 1.1], [0.85, -0.55, 0.35, 1.1]]
+      0: [top, bot, upL, upR, loL, loR],
+      1: [upR, loR, flag],
+      2: [top, mid, bot, upR, loL],
+      3: [top, mid, bot, upR, loR],
+      4: [mid, upL, upR, loR],
+      5: [top, mid, bot, upL, loR],
+      6: [top, mid, bot, upL, loL, loR],
+      7: [top, upR, loR],
+      8: [top, mid, bot, upL, upR, loL, loR],
+      9: [top, mid, bot, upL, upR, loR]
     };
     const g = new THREE.Group();
+    const back = new THREE.Mesh(
+      new THREE.PlaneGeometry(2.5, 3.7),
+      new THREE.MeshBasicMaterial({ color: 0x14141c })
+    );
+    back.rotation.x = -Math.PI / 2;
+    back.position.y = -0.02;
+    g.add(back);
     for (const [lx, lz, w, d] of segs[digit] || segs[8]) {
       const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d), mat);
       m.rotation.x = -Math.PI / 2;
       m.position.set(lx, 0, lz);
       g.add(m);
     }
-    g.position.set(ox, 0.54, oz);
+    g.scale.setScalar(6.8);
+    g.position.set(ox, 0.58, oz);
     g.rotation.y = rotY;
     parent.add(g);
   }
   const numMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-  // Approach from +Z sees "36"; from -Z sees "18"
-  addRwyDigit(root, 3, -2.2, WORLD.runway.halfL - 95, 0, numMat);
-  addRwyDigit(root, 6, 2.2, WORLD.runway.halfL - 95, 0, numMat);
-  addRwyDigit(root, 1, -2.2, -WORLD.runway.halfL + 95, Math.PI, numMat);
-  addRwyDigit(root, 8, 2.2, -WORLD.runway.halfL + 95, Math.PI, numMat);
+  // Approach from +Z reads "36"; from -Z reads "18"
+  addRwyDigit(root, 3, -8.2, WORLD.runway.halfL - 230, 0, numMat);
+  addRwyDigit(root, 6, 8.2, WORLD.runway.halfL - 230, 0, numMat);
+  addRwyDigit(root, 1, -8.2, -WORLD.runway.halfL + 230, Math.PI, numMat);
+  addRwyDigit(root, 8, 8.2, -WORLD.runway.halfL + 230, Math.PI, numMat);
   // Aiming-point diamonds (stronger)
   for (const zSign of [-1, 1]) {
     for (const x of [-10, 10]) {
@@ -629,6 +651,7 @@ export function createWorld(scene, opts = {}) {
   terminal.add(termRoof);
   terminal.position.set(WORLD.hangar.x + 95, 0, WORLD.hangar.z + 10);
   root.add(terminal);
+  dressAirport(root, useStd, qualityKey);
 
   // PAPI — 4-box glide path lights (white / red readable)
   const papiGroup = new THREE.Group();
@@ -1098,6 +1121,7 @@ export function createWorld(scene, opts = {}) {
     },
     hitSolid(x, z) {
       if (Math.hypot(x - WORLD.hangar.x, z - WORLD.hangar.z) < 22) return 'hangar';
+      if (Math.hypot(x + 152, z + 58) < 14) return 'terminal';
       if (Math.hypot(x - 70, z + 30) < 10) return 'tower';
       const cx = x - WORLD.city.x, cz = z - WORLD.city.z;
       const cd = Math.hypot(cx, cz);
@@ -1359,6 +1383,158 @@ function dressHangar(root, hangar, useStd) {
     truck.position.set(tx, 0, tz);
     truck.rotation.y = 0.35;
     root.add(truck);
+  }
+}
+
+
+/** Taxi signs, blast fence, fuel-farm fittings, a small GA terminal, baggage carts. */
+function dressAirport(root, useStd, qualityKey) {
+  const low = qualityKey === 'low';
+  const yellow = useStd
+    ? makeToonPbr({ color: 0xffcc22, roughness: 0.55, metalness: 0.08 })
+    : makeFarLambert(0xffcc22);
+  const black = makeFarLambert(0x1a1a22);
+  const steel = useStd
+    ? makeToonPbr({ color: 0xb7c0ca, roughness: 0.35, metalness: 0.55 })
+    : makeFarLambert(0xb7c0ca);
+  const red = makeFarLambert(0xd6453d);
+  const cream = makeFarLambert(0xf3efe6);
+  const glass = useStd
+    ? makeToonPbr({
+        color: 0x7ec8ea,
+        emissive: 0x246888,
+        emissiveIntensity: 0.28,
+        roughness: 0.18,
+        metalness: 0.12,
+        transparent: true,
+        opacity: 0.78
+      })
+    : makeFarLambert(0x7ec8ea);
+  const blue = makeFarLambert(0x3a7ad4);
+
+  function taxiSign(x, z, rotY, digits) {
+    if (blocksRoad(x, z, 8)) return;
+    const g = new THREE.Group();
+    cylAt(g, 0.12, 0.14, 2.6, 6, steel, -1.15, 1.3, 0);
+    cylAt(g, 0.12, 0.14, 2.6, 6, steel, 1.15, 1.3, 0);
+    boxAt(g, 3.2, 1.7, 0.18, yellow, 0, 2.7, 0);
+    boxAt(g, 2.9, 1.35, 0.08, black, 0, 2.7, 0.12);
+    // Chunky arrow head so the sign reads as a direction, plus a runway pair
+    boxAt(g, 0.28, 0.7, 0.1, yellow, -0.7, 2.7, 0.18);
+    boxAt(g, 0.55, 0.28, 0.1, yellow, -0.35, 2.95, 0.18);
+    const bit = {
+      3: [[0.15, 0.35], [0.15, 0], [0.15, -0.35], [0.45, 0.18], [0.45, -0.18]],
+      6: [[-0.15, 0.35], [-0.15, 0], [-0.15, -0.35], [-0.45, 0.18], [-0.45, -0.18], [0.15, -0.18]]
+    };
+    for (const d of digits) {
+      for (const [lx, ly] of bit[d] || []) {
+        boxAt(g, 0.22, 0.16, 0.08, yellow, lx + (d === 6 ? 0.7 : 0.15), 2.7 + ly, 0.2);
+      }
+    }
+    g.position.set(x, 0, z);
+    g.rotation.y = rotY;
+    root.add(g);
+  }
+  // Beside the taxiway, west of the pavement — not on the runway
+  taxiSign(-58, -96, 0.15, [3, 6]);
+  taxiSign(-58, -8, -0.2, [1, 8]);
+
+  // Blast fence parallel to the runway, off the west edge near the north end
+  const slats = low ? 14 : 26;
+  const slatGeo = new THREE.BoxGeometry(0.28, 5.2, 1.15);
+  const fence = new THREE.InstancedMesh(slatGeo, steel, slats);
+  const dummy = new THREE.Object3D();
+  const fenceX = -WORLD.runway.halfW - 18;
+  for (let i = 0; i < slats; i++) {
+    const z = WORLD.runway.halfL - 40 - i * 2.4;
+    dummy.position.set(fenceX, 2.6, z);
+    dummy.rotation.set(0, 0, 0);
+    dummy.scale.set(1, 1, 1);
+    dummy.updateMatrix();
+    fence.setMatrixAt(i, dummy.matrix);
+  }
+  fence.instanceMatrix.needsUpdate = true;
+  root.add(fence);
+  const base = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.45, slats * 2.4), makeFarLambert(0x6a7078));
+  base.position.set(fenceX, 0.25, WORLD.runway.halfL - 40 - (slats - 1) * 1.2);
+  root.add(base);
+
+  // Fuel farm fittings around the tanks already at x=-120..-96, z=30
+  const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, 26, 8), steel);
+  pipe.rotation.z = Math.PI / 2;
+  pipe.position.set(-108, 6.4, 30);
+  root.add(pipe);
+  cylAt(root, 0.22, 0.22, 3.2, 8, steel, -120, 5.2, 30);
+  cylAt(root, 0.22, 0.22, 3.2, 8, steel, -96, 5.2, 30);
+  for (let i = 0; i < 3; i++) {
+    const stripe = new THREE.Mesh(
+      new THREE.PlaneGeometry(7.2, 1.1),
+      new THREE.MeshBasicMaterial({ color: i % 2 ? 0xffcc22 : 0x222222 })
+    );
+    stripe.rotation.x = -Math.PI / 2;
+    stripe.position.set(-120 + i * 12, 0.55, 38);
+    root.add(stripe);
+  }
+  if (!blocksRoad(-88, 52, 12)) {
+    const shed = new THREE.Group();
+    boxAt(shed, 6, 4.2, 5, cream, 0, 2.1, 0);
+    boxAt(shed, 6.6, 0.4, 5.6, red, 0, 4.4, 0);
+    boxAt(shed, 2.2, 2.2, 0.15, glass, 0, 2.4, 2.55);
+    boxAt(shed, 1.2, 0.8, 0.8, red, 2.2, 0.5, 2.2);
+    shed.position.set(-88, 0, 52);
+    root.add(shed);
+  }
+
+  // Small GA terminal west of the field — the big hall sits near the runway centerline
+  if (!blocksRoad(-152, -58, 12)) {
+    const term = new THREE.Group();
+    term.name = 'gaTerminal';
+    boxAt(term, 28, 7, 12, cream, 0, 3.5, 0);
+    boxAt(term, 30, 0.7, 14, blue, 0, 7.4, 0);
+    boxAt(term, 22, 3.2, 0.2, glass, 0, 3.6, 6.1);
+    boxAt(term, 3.2, 3.4, 0.2, black, -8, 1.8, 6.15);
+    boxAt(term, 3.2, 3.4, 0.2, black, 8, 1.8, 6.15);
+    boxAt(term, 16, 0.35, 6, steel, 0, 3.2, 9.2);
+    for (const x of [-6, 0, 6]) {
+      cylAt(term, 0.15, 0.18, 3.2, 6, steel, x, 1.6, 11.5);
+    }
+    // Canopy sign
+    boxAt(term, 8, 1.6, 0.25, yellow, 0, 6.2, 6.3);
+    boxAt(term, 1.2, 0.35, 0.12, black, -1.6, 6.2, 6.48);
+    boxAt(term, 1.2, 0.35, 0.12, black, 0, 6.55, 6.48);
+    boxAt(term, 1.2, 0.35, 0.12, black, 1.6, 6.2, 6.48);
+    term.position.set(-152, 0, -58);
+    root.add(term);
+
+    const cartN = low ? 4 : 8;
+    const cartGeo = new THREE.BoxGeometry(1.3, 0.7, 2.2);
+    const cartMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    const carts = new THREE.InstancedMesh(cartGeo, cartMat, cartN);
+    const wheelGeo = new THREE.CylinderGeometry(0.22, 0.22, 0.18, 8);
+    const wheels = new THREE.InstancedMesh(wheelGeo, black, cartN * 4);
+    const colors = [0xf2f2f2, 0xffcc33, 0x3a7ad4, 0xd6453d];
+    let w = 0;
+    for (let i = 0; i < cartN; i++) {
+      const x = -152 - 10 + (i % 4) * 3.2;
+      const z = -58 + 16 + Math.floor(i / 4) * 3.4;
+      dummy.position.set(x, 0.7, z);
+      dummy.rotation.set(0, i % 2 ? 0.2 : -0.15, 0);
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix();
+      carts.setMatrixAt(i, dummy.matrix);
+      carts.setColorAt(i, new THREE.Color(colors[i % colors.length]));
+      for (const [ox, oz] of [[-0.5, 0.7], [0.5, 0.7], [-0.5, -0.7], [0.5, -0.7]]) {
+        dummy.position.set(x + ox, 0.22, z + oz);
+        dummy.rotation.set(0, 0, Math.PI / 2);
+        dummy.updateMatrix();
+        wheels.setMatrixAt(w++, dummy.matrix);
+      }
+    }
+    carts.instanceMatrix.needsUpdate = true;
+    if (carts.instanceColor) carts.instanceColor.needsUpdate = true;
+    wheels.instanceMatrix.needsUpdate = true;
+    root.add(carts);
+    root.add(wheels);
   }
 }
 
